@@ -1,0 +1,370 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+
+export const translations: Record<string, Record<string, string>> = {
+  tr: {
+    // Navigation / Header
+    app_title: "Caraba",
+    tagline: "İş Yeri Yolculuk Paylaşımı",
+    tab_trips: "Yolculuklar",
+    tab_buddies: "Yol Arkadaşlarım",
+    tab_finances: "Ödemeler & Finans",
+    logout: "Çıkış Yap",
+    login: "Giriş Yap",
+    register: "Kayıt Ol",
+    settings: "Ayarlar",
+    notifications: "Bildirimler",
+    no_notifications: "Yeni bildiriminiz bulunmuyor.",
+    mark_all_read: "Hepsini Okundu İşaretle",
+    theme_light: "Aydınlık Mod",
+    theme_dark: "Karanlık Mod",
+
+    // Trips Page
+    active_trips_title: "Aktif Seferler & Planlanan Rotalar",
+    sefer_mevcut: "Sefer Mevcut",
+    no_trips: "Sefer planı bulunamadı",
+    no_trips_desc: "Şu an için tanımlı ya da arkadaşlarınız tarafından oluşturulmuş aktif seyahat rotası yok.",
+    create_first_trip: "İlk Seferi Sen Oluştur",
+    new_trip_btn: "Yeni Sefer Planla",
+    my_trips_filter: "Yalnızca Benim Seferlerim",
+
+    // Trip Card
+    driver: "Sürücü",
+    passenger: "Yolcu",
+    seats_filled: "Koltuk Dolu",
+    per_person: "/ kişi",
+    total_cost: "Toplam",
+    trip_scheduled: "Planlandı",
+    trip_active: "Yolculuk Başladı",
+    trip_completed: "Tamamlandı",
+    yours: "Sizinki",
+    stops: "Güzergah Noktaları",
+    passengers_title: "Yolcular",
+    join_requests: "Katılma Talepleri",
+    request_pending: "Onay Bekliyor",
+    join_trip_btn: "Yolculuğa Katıl",
+    cancel_request_btn: "Talebi İptal Et",
+    start_trip_btn: "Yolculuğu Başlat",
+    complete_trip_btn: "Yolculuğu Tamamla",
+    edit_trip: "Düzenle",
+    repeat_trip: "Tekrarla",
+    live_location_sharing: "Canlı Konum Paylaşımı",
+    location_sharing_active: "Canlı konum paylaşımı aktif. Sürücü harita üzerinde takip edilebilir.",
+    location_not_sharing: "Henüz konum paylaşılmıyor.",
+
+    // Trip Form
+    new_trip_title: "Yeni Sefer Planla",
+    edit_trip_title: "Yolculuğu Düzenle",
+    repeat_trip_title: "Yolculuğu Tekrarla",
+    trip_label: "Sefer Başlığı",
+    trip_label_placeholder: "Örn. Sabah İşe Gidiş",
+    date_label: "Tarih",
+    time_label: "Saat",
+    max_passengers: "Maksimum Yolcu Sayısı",
+    estimated_cost: "Tahmini Sefer Maliyeti",
+    route_details: "Güzergah Detayları",
+    distance: "Mesafe",
+    duration: "Süre",
+    cost_calculation_notice: "Maliyet güzergaha göre otomatik hesaplanır (veya manuel girilebilir).",
+    recurring_trip: "Yolculuğu Haftalık Tekrarla",
+    recurring_days: "Tekrarlanacak Günler",
+    cancel: "Vazgeç",
+    save: "Kaydet",
+    create: "Sefer Oluştur",
+
+    // Route Builder
+    start_point: "Başlangıç Noktası (Ev vb.)",
+    end_point: "Varış Noktası (Firma/Ofis vb.)",
+    add_stop: "Ara Durak Ekle",
+    stop_placeholder: "Adres ara veya ekle...",
+    add_stop_btn: "Ekle",
+
+    // Buddy Selector
+    buddies_title: "Yol Arkadaşlarım",
+    buddies_subtitle: "İş Yeri Yolculuk Grubu",
+    buddies_desc: "Yol arkadaşlarınızı yönetin, yeni çalışma arkadaşları ekleyin ve onay bekleyen talepleri inceleyin.",
+    tab_my_buddies: "Yoldaşlarım",
+    tab_pending: "Onay Bekleyenler",
+    tab_find: "Bul & Ekle",
+    new_buddy_btn: "Yeni Arkadaş Oluştur",
+    new_buddy_title: "Yeni Yol Arkadaşı Bilgileri",
+    name_surname: "AD SOYAD",
+    email_address: "E-POSTA ADRESİ",
+    name_placeholder: "Örn. Mehmet Yılmaz",
+    email_placeholder: "Örn. mehmet@firma.com",
+    add_buddy_btn: "Arkadaşı Kaydet",
+    no_buddies: "Henüz yol arkadaşı eklemediniz.",
+    no_buddies_desc: "\"Bul & Ekle\" sekmesini kullanarak çalışma arkadaşlarınızı arayabilir veya manuel ekleyebilirsiniz.",
+    edit_buddy_title: "Arkadaş Bilgilerini Düzenle",
+    save_edit: "Kaydet",
+    remove_buddy: "Çıkar",
+    incoming_requests: "Gelen Onay Talepleri",
+    outgoing_requests: "Giden Onay Talepleri",
+    no_incoming_requests: "Bekleyen gelen onay talebi bulunmuyor.",
+    no_outgoing_requests: "Bekleyen giden onay talebi bulunmuyor.",
+    request_received: "Size onay talebi gönderdi",
+    waiting_approval: "Onay Bekleniyor...",
+    accept: "Kabul Et",
+    reject: "Reddet",
+    cancel_action: "İptal Et",
+    search_placeholder: "Çalışma arkadaşınızın ismi veya e-postası...",
+    search_no_query: "Arkadaş Aramaya Başlayın",
+    search_no_query_desc: "Kayıtlı çalışma arkadaşlarınızı bulup onay talebi göndermek için yukarıdaki kutuyu kullanın.",
+    search_results: "Arama Sonuçları",
+    no_results: "Kriterlere uygun yeni çalışma arkadaşı bulunamadı.",
+    add_action: "Ekle",
+
+    // Finances Page
+    finance_summary_title: "Sefer Ödemeleri & Maliyet Dağılımı",
+    total_spent: "Toplam Harcamam",
+    total_received: "Toplam Kazancım",
+    tab_my_payments: "Ödemelerim (Alacaklı Sürücüye)",
+    tab_my_receipts: "Alacaklarım (Yolculardan)",
+    tab_all_tx: "Tüm İşlemler",
+    no_transactions: "Kayıtlı işlem bulunamadı.",
+    no_transactions_desc: "Henüz tamamlanmış bir seyahat ödemesi veya alacağı bulunmuyor.",
+    payment_status_paid: "Ödendi",
+    payment_status_pending: "Ödeme Bekliyor",
+    payer: "Yolcu",
+    receiver: "Sürücü",
+    amount: "Miktar",
+    status: "Durum",
+    confirm_payment: "Ödemeyi Onayla",
+    payment_history: "Ödeme Geçmişi",
+
+    // Settings Modal
+    settings_title: "Ayarlar",
+    app_settings: "Uygulama Ayarları",
+    user_settings: "Kullanıcı Ayarları",
+    lang_pref: "Dil Seçeneği (Language)",
+    appearance_mode: "Görünüm Modu",
+    info_stored: "Uygulama ayarlarınız tarayıcı önbelleğinizde saklanır ve otomatik uygulanır.",
+    username_label: "Kullanıcı Adı",
+    email_label: "Kayıtlı E-posta Adresi",
+    save_changes: "Değişiklikleri Kaydet",
+    danger_zone: "Tehlikeli Bölge (Danger Zone)",
+    delete_account_title: "Hesabı Sil",
+    delete_account_desc: "Hesabınızı sildiğinizde profil bilgileriniz, arkadaşlık ilişkileriniz ve seyahat verileriniz kalıcı olarak kaldırılır.",
+    delete_account_btn: "Hesabımı Kaldır",
+    delete_confirm_title: "Hesabınızı silmek istediğinize emin misiniz?",
+    delete_confirm_subtitle: "Bu işlem kalıcıdır ve geri alınamaz.",
+    delete_confirm_instructions: "İşlemi onaylamak için lütfen aşağıdaki kutuya büyük harflerle SİL yazın.",
+    delete_confirm_placeholder: "SİL",
+    delete_confirm_submit: "Hesabımı Kalıcı Olarak Sil",
+    vazgec: "Vazgeç",
+
+    // Auth
+    welcome_title: "İş Yerine Beraber Gidin, Maliyeti Paylaşın!",
+    welcome_desc: "Caraba ile çalışma arkadaşlarınızla ortak yolculuk planları oluşturabilir, karbon ayak izinizi azaltabilir ve yakıt masraflarını adilce paylaşabilirsiniz.",
+    login_title: "Kullanıcı Girişi",
+    register_title: "Yeni Hesap Oluştur",
+    auth_email_placeholder: "İş e-postanız (örn: ad.soyad@firma.com)",
+    auth_password_placeholder: "Şifreniz (min. 6 karakter)",
+    auth_name_placeholder: "Adınız Soyadınız",
+    login_submit: "Giriş Yap",
+    register_submit: "Kayıt Ol",
+    google_signin: "Google ile Giriş Yap",
+    have_account: "Zaten hesabınız var mı? Giriş yapın",
+    no_account: "Hesabınız yok mu? Yeni kayıt oluşturun",
+    signing_in: "Giriş yapılıyor...",
+    registering: "Kayıt oluşturuluyor..."
+  },
+  en: {
+    // Navigation / Header
+    app_title: "Caraba",
+    tagline: "Workplace Carpooling",
+    tab_trips: "Trips",
+    tab_buddies: "My Buddies",
+    tab_finances: "Payments & Finances",
+    logout: "Log Out",
+    login: "Log In",
+    register: "Register",
+    settings: "Settings",
+    notifications: "Notifications",
+    no_notifications: "You have no new notifications.",
+    mark_all_read: "Mark All as Read",
+    theme_light: "Light Mode",
+    theme_dark: "Dark Mode",
+
+    // Trips Page
+    active_trips_title: "Active Trips & Planned Routes",
+    sefer_mevcut: "Trips Available",
+    no_trips: "No trips found",
+    no_trips_desc: "There are currently no active trip routes defined or created by your buddies.",
+    create_first_trip: "Create the First Trip",
+    new_trip_btn: "Plan a New Trip",
+    my_trips_filter: "Only My Trips",
+
+    // Trip Card
+    driver: "Driver",
+    passenger: "Passenger",
+    seats_filled: "Seats Filled",
+    per_person: "/ person",
+    total_cost: "Total",
+    trip_scheduled: "Scheduled",
+    trip_active: "Trip Started",
+    trip_completed: "Completed",
+    yours: "Yours",
+    stops: "Route Points",
+    passengers_title: "Passengers",
+    join_requests: "Join Requests",
+    request_pending: "Pending Approval",
+    join_trip_btn: "Join Trip",
+    cancel_request_btn: "Cancel Request",
+    start_trip_btn: "Start Trip",
+    complete_trip_btn: "Complete Trip",
+    edit_trip: "Edit",
+    repeat_trip: "Repeat",
+    live_location_sharing: "Live Location Sharing",
+    location_sharing_active: "Live location sharing active. The driver can be tracked on the map.",
+    location_not_sharing: "Location sharing is not active yet.",
+
+    // Trip Form
+    new_trip_title: "Plan a New Trip",
+    edit_trip_title: "Edit Trip",
+    repeat_trip_title: "Repeat Trip",
+    trip_label: "Trip Title",
+    trip_label_placeholder: "e.g. Morning Commute",
+    date_label: "Date",
+    time_label: "Time",
+    max_passengers: "Max Passengers",
+    estimated_cost: "Estimated Trip Cost",
+    route_details: "Route Details",
+    distance: "Distance",
+    duration: "Duration",
+    cost_calculation_notice: "Cost is auto-calculated based on the route (or can be entered manually).",
+    recurring_trip: "Weekly Recurring Trip",
+    recurring_days: "Recurring Days",
+    cancel: "Cancel",
+    save: "Save",
+    create: "Create Trip",
+
+    // Route Builder
+    start_point: "Starting Point (Home, etc.)",
+    end_point: "Destination (Company/Office, etc.)",
+    add_stop: "Add Stop",
+    stop_placeholder: "Search or add address...",
+    add_stop_btn: "Add",
+
+    // Buddy Selector
+    buddies_title: "My Buddies",
+    buddies_subtitle: "Workplace Journey Group",
+    buddies_desc: "Manage your buddies, add new coworkers, and review pending approval requests.",
+    tab_my_buddies: "My Buddies",
+    tab_pending: "Pending Requests",
+    tab_find: "Find & Add",
+    new_buddy_btn: "Create Custom Buddy",
+    new_buddy_title: "New Buddy Information",
+    name_surname: "FULL NAME",
+    email_address: "EMAIL ADDRESS",
+    name_placeholder: "e.g. John Doe",
+    email_placeholder: "e.g. john@company.com",
+    add_buddy_btn: "Save Buddy",
+    no_buddies: "You haven't added any buddies yet.",
+    no_buddies_desc: "You can search for coworkers using the \"Find & Add\" tab or add them manually.",
+    edit_buddy_title: "Edit Buddy Information",
+    save_edit: "Save",
+    remove_buddy: "Remove",
+    incoming_requests: "Incoming Requests",
+    outgoing_requests: "Outgoing Requests",
+    no_incoming_requests: "No pending incoming requests.",
+    no_outgoing_requests: "No pending outgoing requests.",
+    request_received: "sent you a buddy request",
+    waiting_approval: "Waiting for approval...",
+    accept: "Accept",
+    reject: "Reject",
+    cancel_action: "Cancel",
+    search_placeholder: "Search by your coworker's name or email...",
+    search_no_query: "Start Searching for Buddies",
+    search_no_query_desc: "Use the box above to find registered coworkers and send buddy requests.",
+    search_results: "Search Results",
+    no_results: "No coworkers found matching the criteria.",
+    add_action: "Add",
+
+    // Finances Page
+    finance_summary_title: "Trip Payments & Cost Sharing",
+    total_spent: "My Total Spent",
+    total_received: "My Total Earnings",
+    tab_my_payments: "My Payments (To Driver)",
+    tab_my_receipts: "My Earnings (From Passengers)",
+    tab_all_tx: "All Transactions",
+    no_transactions: "No transactions found.",
+    no_transactions_desc: "There are currently no completed trip payments or earnings.",
+    payment_status_paid: "Paid",
+    payment_status_pending: "Payment Pending",
+    payer: "Passenger",
+    receiver: "Driver",
+    amount: "Amount",
+    status: "Status",
+    confirm_payment: "Confirm Payment",
+    payment_history: "Payment History",
+
+    // Settings Modal
+    settings_title: "Settings",
+    app_settings: "App Settings",
+    user_settings: "User Settings",
+    lang_pref: "Language Preference (Dil Seçeneği)",
+    appearance_mode: "Appearance Mode",
+    info_stored: "Your application settings are stored in your browser cache and applied automatically.",
+    username_label: "Username",
+    email_label: "Registered Email Address",
+    save_changes: "Save Changes",
+    danger_zone: "Danger Zone",
+    delete_account_title: "Delete Account",
+    delete_account_desc: "When you delete your account, your profile information, buddy relationships, and travel data are permanently removed.",
+    delete_account_btn: "Remove My Account",
+    delete_confirm_title: "Are you sure you want to delete your account?",
+    delete_confirm_subtitle: "This action is permanent and cannot be undone.",
+    delete_confirm_instructions: "To confirm, please type SİL (or DELETE) in capital letters in the box below.",
+    delete_confirm_placeholder: "SİL",
+    delete_confirm_submit: "Permanently Delete My Account",
+    vazgec: "Cancel",
+
+    // Auth
+    welcome_title: "Commute Together, Share the Cost!",
+    welcome_desc: "With Caraba, you can plan commute routes with coworkers, reduce your carbon footprint, and share fuel costs fairly.",
+    login_title: "User Log In",
+    register_title: "Create New Account",
+    auth_email_placeholder: "Work email (e.g. name.surname@company.com)",
+    auth_password_placeholder: "Password (min. 6 characters)",
+    auth_name_placeholder: "Your Full Name",
+    login_submit: "Log In",
+    register_submit: "Register",
+    google_signin: "Sign In with Google",
+    have_account: "Already have an account? Log in",
+    no_account: "Don't have an account? Create one",
+    signing_in: "Logging in...",
+    registering: "Creating account..."
+  }
+};
+
+interface LanguageContextType {
+  language: string;
+  setLanguage: (lang: string) => void;
+  t: (key: string) => string;
+}
+
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+
+export const LanguageProvider: React.FC<{ children: React.ReactNode; currentLang: string; onLangChange: (lang: string) => void }> = ({ 
+  children, 
+  currentLang, 
+  onLangChange 
+}) => {
+  const t = (key: string): string => {
+    return translations[currentLang]?.[key] || translations['tr']?.[key] || key;
+  };
+
+  return (
+    <LanguageContext.Provider value={{ language: currentLang, setLanguage: onLangChange, t }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+};
+
+export const useLanguage = () => {
+  const context = useContext(LanguageContext);
+  if (!context) {
+    throw new Error('useLanguage must be used within a LanguageProvider');
+  }
+  return context;
+};

@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "buddies": { "type": "array" },
+        "avatar": { "type": "string" }
+      },
+      "required": ["uid", "name", "email"]
+    },
+    "Trip": {
+      "title": "Trip",
+      "description": "Carpooling journey details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "driverId": { "type": "string" },
+        "driverName": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "stops": { "type": "array" },
+        "maxPassengers": { "type": "integer" },
+        "estimatedCost": { "type": "number" },
+        "distanceKm": { "type": "number" },
+        "durationMin": { "type": "number" },
+        "status": { "type": "string" },
+        "passengers": { "type": "array" },
+        "requests": { "type": "array" },
+        "recurring": { "type": "boolean" },
+        "recurringDays": { "type": "array" },
+        "liveLocations": { "type": "object" }
+      },
+      "required": ["id", "driverId", "driverName", "title", "date", "time", "stops", "estimatedCost", "status"]
+    },
+    "Finance": {
+      "title": "Finance",
+      "description": "Payment transactions and debts between co-workers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tripId": { "type": "string" },
+        "tripTitle": { "type": "string" },
+        "date": { "type": "string" },
+        "payerId": { "type": "string" },
+        "payerName": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "receiverName": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "tripId", "payerId", "receiverId", "amount", "status"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time user notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["id", "recipientId", "senderName", "type", "message", "createdAt", "read"]
+    },
+    "BuddyRequest": {
+      "title": "BuddyRequest",
+      "description": "Approval request for carpool buddies",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fromId": { "type": "string" },
+        "toId": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "fromId", "toId", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Application users and their buddy list"
+    },
+    "/buddy_requests/{requestId}": {
+      "schema": "BuddyRequest",
+      "description": "Buddy approval requests between users"
+    },
+    "/trips/{tripId}": {
+      "schema": "Trip",
+      "description": "Organized carpooling journeys"
+    },
+    "/finances/{financeId}": {
+      "schema": "Finance",
+      "description": "Debts and receivables between drivers and passengers"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications for requests and payments"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Caraba",
+  "description": "Caraba - Ulaş ve paylaş. İş arkadaşlarıyla yolculuk organize etme, duraklar ekleyerek rota oluşturma, canlı konum paylaşma ve yolculuk masraflarını eşit şekilde paylaştırma uygulaması.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
