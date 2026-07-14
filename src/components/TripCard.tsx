@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Trip, User } from '../types';
-import { sendJoinRequest, manageJoinRequest, completeTrip, updateTrip, cancelJoinRequest } from '../services/db';
+import { sendJoinRequest, manageJoinRequest, completeTrip, updateTrip, cancelJoinRequest, deleteTrip } from '../services/db';
 import LocationShare from './LocationShare';
 import { 
   Car, 
@@ -18,7 +18,9 @@ import {
   Edit2,
   RefreshCcw,
   Users,
-  Info
+  Info,
+  MoreVertical,
+  Trash2
 } from 'lucide-react';
 
 interface TripCardProps {
@@ -31,6 +33,7 @@ interface TripCardProps {
 
 export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat }: TripCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   const isDriver = trip.driverId === currentUser.uid;
   const isPassenger = trip.passengers?.includes(currentUser.uid);
@@ -141,6 +144,128 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
             {splitCostPerPerson.toFixed(2)} zł <span className="text-[9px] text-gray-400 font-medium">/ kişi</span>
           </p>
           <span className="text-[8px] text-gray-400 block">Toplam: {trip.estimatedCost} zł</span>
+        </div>
+
+        {/* Corner Dropdown Menu */}
+        <div className="shrink-0 relative self-start -mt-1 -mr-1">
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+            id={`trip-menu-btn-${trip.id}`}
+            title="Menüyü Aç"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)}></div>
+              <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-100 rounded-xl shadow-xl z-50 divide-y divide-slate-100 py-1 text-xs text-slate-700 animate-fadeIn">
+                {isDriver ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        onEdit(trip);
+                        setShowMenu(false);
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2 cursor-pointer transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-indigo-500" />
+                      Düzenle
+                    </button>
+
+                    {trip.status === 'scheduled' && (
+                      <button
+                        onClick={() => {
+                          handleStartTrip();
+                          setShowMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 cursor-pointer transition-colors"
+                      >
+                        <Play className="w-3.5 h-3.5 text-blue-500" />
+                        Yolculuğu Başlat
+                      </button>
+                    )}
+
+                    {trip.status === 'active' && (
+                      <button
+                        onClick={() => {
+                          handleCompleteTrip();
+                          setShowMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 cursor-pointer transition-colors"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                        Yolculuğu Tamamla
+                      </button>
+                    )}
+
+                    {trip.status === 'completed' && (
+                      <button
+                        onClick={() => {
+                          onRepeat(trip);
+                          setShowMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2 cursor-pointer transition-colors"
+                      >
+                        <RefreshCcw className="w-3.5 h-3.5 text-indigo-500" />
+                        Yolculuğu Tekrarla
+                      </button>
+                    )}
+
+                    <button
+                      onClick={async () => {
+                        if (window.confirm('Bu yolculuğu iptal etmek/silmek istediğinize emin misiniz?')) {
+                          await deleteTrip(trip.id);
+                        }
+                        setShowMenu(false);
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-red-50 hover:text-red-600 flex items-center gap-2 cursor-pointer text-red-600 transition-colors font-semibold"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                      Yolculuğu Sil / İptal Et
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {trip.status === 'scheduled' && (
+                      <>
+                        {!myRequest && (
+                          <button
+                            onClick={() => {
+                              handleJoinRequest();
+                              setShowMenu(false);
+                            }}
+                            disabled={trip.passengers?.length >= trip.maxPassengers}
+                            className="w-full text-left px-4 py-2 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                          >
+                            <Navigation className="w-3.5 h-3.5 text-indigo-500" />
+                            Yolculuğa Katıl
+                          </button>
+                        )}
+
+                        {myRequest && (
+                          <button
+                            onClick={() => {
+                              handleCancelRequest();
+                              setShowMenu(false);
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-rose-50 hover:text-rose-600 flex items-center gap-2 cursor-pointer text-rose-600"
+                          >
+                            <UserX className="w-3.5 h-3.5 text-rose-500" />
+                            Ayrıl / İsteği İptal Et
+                          </button>
+                        )}
+                      </>
+                    )}
+                    <div className="px-4 py-1.5 text-[10px] text-gray-400 bg-slate-50">
+                      Sürücü: {trip.driverName}
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
       </div>

@@ -507,6 +507,16 @@ export async function updateTrip(tripId: string, updates: Partial<Trip>) {
   }
 }
 
+export async function deleteTrip(tripId: string) {
+  const path = `trips/${tripId}`;
+  try {
+    const tripRef = doc(db, 'trips', tripId);
+    await deleteDoc(tripRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+}
+
 export function subscribeToTrips(onUpdate: (trips: Trip[]) => void) {
   if (initError) {
     return () => {};

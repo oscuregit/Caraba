@@ -86,6 +86,7 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
 
   // Layout View Tabs
   const [activeTab, setActiveTab] = useState<'trips' | 'buddies' | 'finances'>('trips');
+  const [tripSubTab, setTripSubTab] = useState<'active' | 'scheduled' | 'completed'>('active');
   
   // Modals state
   const [showTripForm, setShowTripForm] = useState(false);
@@ -579,6 +580,11 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
     return approvedBuddiesList.some(buddy => buddy.uid === trip.driverId);
   });
 
+  const activeTripsList = filteredTrips.filter(t => t.status === 'active');
+  const scheduledTripsList = filteredTrips.filter(t => t.status === 'scheduled');
+  const completedTripsList = filteredTrips.filter(t => t.status === 'completed');
+  const currentSubTabTrips = filteredTrips.filter(t => t.status === tripSubTab);
+
   return (
     <div className={`min-h-screen flex flex-col justify-between antialiased transition-colors duration-300 ${
       theme === 'dark' ? 'bg-slate-950 text-slate-100 dark' : 'bg-slate-100 text-slate-800'
@@ -785,32 +791,86 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
           {/* Core Widescreen Bento Grid */}
           <div className="flex-1 grid grid-cols-12 gap-5 overflow-y-auto pr-2 pb-4">
             
-            {/* Bento Block 1: Active Trips list (col-span-8) */}
+            {/* Bento Block 1: Trips List with Tabs (col-span-8) */}
             <div className="col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
-              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              {/* Header Title bar */}
+              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center pb-2">
                 <span className="font-display font-bold text-slate-700 text-xs flex items-center gap-2 uppercase tracking-wide">
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                  {t('active_trips_title')}
+                  <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-pulse"></span>
+                  {language === 'en' ? 'Carpool Journeys' : 'Carpool Seferleri'}
                 </span>
                 <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">
-                  {filteredTrips.length} {t('sefer_mevcut')}
+                  {filteredTrips.length} {language === 'en' ? 'Total' : 'Toplam'}
                 </span>
+              </div>
+
+              {/* Subtabs switcher */}
+              <div className="flex border-b border-slate-100 bg-white p-2 gap-1.5 shrink-0">
+                <button
+                  onClick={() => setTripSubTab('active')}
+                  className={`flex-1 py-2.5 px-3 text-center rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    tripSubTab === 'active'
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
+                      : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
+                  }`}
+                  id="tab-active-trips"
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${tripSubTab === 'active' ? 'animate-pulse' : ''}`}></span>
+                  {language === 'en' ? 'Active Trip' : 'Aktif Yolculuk'}
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tripSubTab === 'active' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
+                    {activeTripsList.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setTripSubTab('scheduled')}
+                  className={`flex-1 py-2.5 px-3 text-center rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    tripSubTab === 'scheduled'
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
+                      : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
+                  }`}
+                  id="tab-scheduled-trips"
+                >
+                  {language === 'en' ? 'Planned' : 'Planlanan'}
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tripSubTab === 'scheduled' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
+                    {scheduledTripsList.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setTripSubTab('completed')}
+                  className={`flex-1 py-2.5 px-3 text-center rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    tripSubTab === 'completed'
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
+                      : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
+                  }`}
+                  id="tab-completed-trips"
+                >
+                  {language === 'en' ? 'Completed' : 'Tamamlanan'}
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tripSubTab === 'completed' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
+                    {completedTripsList.length}
+                  </span>
+                </button>
               </div>
               
               <div className="flex-1 p-5 overflow-y-auto bg-slate-50/20">
-                {filteredTrips.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-grid-pattern opacity-80 min-h-[250px]">
-                    <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-3">
-                      <Car className="w-6 h-6 animate-pulse" />
+                {currentSubTabTrips.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6 opacity-80 min-h-[250px]">
+                    <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-xl flex items-center justify-center mb-3">
+                      <Car className="w-6 h-6" />
                     </div>
-                    <h3 className="text-xs font-display font-bold text-slate-800">{t('no_trips')}</h3>
-                    <p className="text-[10px] text-slate-500 mt-1 max-w-[280px]">
-                      {t('no_trips_desc')}
+                    <h3 className="text-xs font-display font-bold text-slate-700">
+                      {tripSubTab === 'active' ? (language === 'en' ? 'No Active Trips' : 'Aktif Yolculuk Yok') :
+                       tripSubTab === 'scheduled' ? (language === 'en' ? 'No Planned Trips' : 'Planlanmış Yolculuk Yok') :
+                       (language === 'en' ? 'No Completed Trips' : 'Tamamlanmış Yolculuk Yok')}
+                    </h3>
+                    <p className="text-[10px] text-slate-400 mt-1 max-w-[280px]">
+                      {tripSubTab === 'active' ? (language === 'en' ? 'There is no active journey right now.' : 'Şu anda yolda olan aktif bir carpool yolculuğu bulunmuyor.') :
+                       tripSubTab === 'scheduled' ? (language === 'en' ? 'There are no planned routes. You can create a new route!' : 'İleri tarihli planlanmış bir carpool seferi bulunmuyor. Yeni bir rota oluşturabilirsiniz!') :
+                       (language === 'en' ? 'You have not completed any carpool journeys yet.' : 'Daha önce tamamlenmiş bir carpool yolculuğunuz bulunmamaktadır.')}
                     </p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    {filteredTrips.map((trip) => (
+                    {currentSubTabTrips.map((trip) => (
                       <TripCard 
                         key={trip.id} 
                         trip={trip} 
@@ -1082,8 +1142,8 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
             <div className="space-y-4" id="view-trips">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xs font-display font-bold text-gray-400 uppercase tracking-wider pl-0.5">{language === 'en' ? 'Active Trips' : 'Aktif Yolculuklar'}</h2>
-                  <p className="text-[10px] text-gray-400">{language === 'en' ? 'Planned carpool routes' : 'Planlanan carpool seferleri'}</p>
+                  <h2 className="text-xs font-display font-bold text-gray-400 uppercase tracking-wider pl-0.5">{language === 'en' ? 'Carpool Journeys' : 'Carpool Seferleri'}</h2>
+                  <p className="text-[10px] text-gray-400">{language === 'en' ? 'Manage and browse routes' : 'Yolculukları inceleyin ve yönetin'}</p>
                 </div>
                 
                 <button
@@ -1100,19 +1160,69 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
                 </button>
               </div>
 
-              {filteredTrips.length === 0 ? (
+              {/* Subtabs switcher for Mobile */}
+              <div className="flex border border-slate-200 bg-white p-1 rounded-2xl gap-1 shrink-0 shadow-sm">
+                <button
+                  onClick={() => setTripSubTab('active')}
+                  className={`flex-1 py-2 text-center rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    tripSubTab === 'active'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-indigo-600'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${tripSubTab === 'active' ? 'animate-pulse' : ''}`}></span>
+                  {language === 'en' ? 'Active' : 'Aktif'}
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${tripSubTab === 'active' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
+                    {activeTripsList.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setTripSubTab('scheduled')}
+                  className={`flex-1 py-2 text-center rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    tripSubTab === 'scheduled'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-indigo-600'
+                  }`}
+                >
+                  {language === 'en' ? 'Planned' : 'Planlanan'}
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${tripSubTab === 'scheduled' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
+                    {scheduledTripsList.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setTripSubTab('completed')}
+                  className={`flex-1 py-2 text-center rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    tripSubTab === 'completed'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-indigo-600'
+                  }`}
+                >
+                  {language === 'en' ? 'Completed' : 'Biten'}
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${tripSubTab === 'completed' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
+                    {completedTripsList.length}
+                  </span>
+                </button>
+              </div>
+
+              {currentSubTabTrips.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-3">
-                    <Car className="w-6 h-6 animate-pulse" />
+                  <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Car className="w-6 h-6" />
                   </div>
-                  <h3 className="text-xs font-display font-bold text-gray-800">{t('no_trips')}</h3>
+                  <h3 className="text-xs font-display font-bold text-gray-800">
+                    {tripSubTab === 'active' ? (language === 'en' ? 'No Active Trips' : 'Aktif Yolculuk Yok') :
+                     tripSubTab === 'scheduled' ? (language === 'en' ? 'No Planned Trips' : 'Planlanmış Yolculuk Yok') :
+                     (language === 'en' ? 'No Completed Trips' : 'Tamamlanmış Yolculuk Yok')}
+                  </h3>
                   <p className="text-[10px] text-gray-500 mt-1.5 leading-relaxed max-w-[250px] mx-auto">
-                    {t('no_trips_desc')}
+                    {tripSubTab === 'active' ? (language === 'en' ? 'There is no active journey right now.' : 'Şu anda yolda olan aktif bir carpool yolculuğu bulunmuyor.') :
+                     tripSubTab === 'scheduled' ? (language === 'en' ? 'There are no planned routes.' : 'Planlanmış bir carpool seferi bulunmuyor.') :
+                     (language === 'en' ? 'You have not completed any carpool journeys yet.' : 'Daha önce tamamlenmiş bir carpool yolculuğunuz bulunmamaktadır.')}
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {filteredTrips.map((trip) => (
+                  {currentSubTabTrips.map((trip) => (
                     <TripCard 
                       key={trip.id} 
                       trip={trip} 
