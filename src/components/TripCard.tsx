@@ -34,6 +34,7 @@ interface TripCardProps {
 export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat }: TripCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const isDriver = trip.driverId === currentUser.uid;
   const isPassenger = trip.passengers?.includes(currentUser.uid);
@@ -159,7 +160,7 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
 
           {showMenu && (
             <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)}></div>
+              <div className="fixed inset-0 z-40" onClick={() => { setShowMenu(false); setShowDeleteConfirm(false); }}></div>
               <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-100 rounded-xl shadow-xl z-50 divide-y divide-slate-100 py-1 text-xs text-slate-700 animate-fadeIn">
                 {isDriver ? (
                   <>
@@ -213,18 +214,45 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
                       </button>
                     )}
 
-                    <button
-                      onClick={async () => {
-                        if (window.confirm('Bu yolculuğu iptal etmek/silmek istediğinize emin misiniz?')) {
-                          await deleteTrip(trip.id);
-                        }
-                        setShowMenu(false);
-                      }}
-                      className="w-full text-left px-4 py-2 hover:bg-red-50 hover:text-red-600 flex items-center gap-2 cursor-pointer text-red-600 transition-colors font-semibold"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                      Yolculuğu Sil / İptal Et
-                    </button>
+                    {!showDeleteConfirm ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowDeleteConfirm(true);
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-red-50 hover:text-red-600 flex items-center gap-2 cursor-pointer text-red-600 transition-colors font-semibold"
+                        id={`trip-delete-btn-${trip.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        Yolculuğu Sil / İptal Et
+                      </button>
+                    ) : (
+                      <div className="p-3 bg-red-50 text-red-700 space-y-2 animate-fadeIn" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-[10px] font-semibold">Silmek istediğinize emin misiniz?</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await deleteTrip(trip.id);
+                              setShowDeleteConfirm(false);
+                              setShowMenu(false);
+                            }}
+                            className="bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors flex-1 text-center"
+                          >
+                            Evet, Sil
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowDeleteConfirm(false);
+                            }}
+                            className="bg-white border border-red-200 hover:bg-red-100 text-red-700 font-bold text-[10px] px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors flex-1 text-center"
+                          >
+                            Vazgeç
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>
