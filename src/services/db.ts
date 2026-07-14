@@ -21,7 +21,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-import { db, auth } from '../firebase';
+import { db, auth, initError } from '../firebase';
 import { User, Trip, RouteStop, JoinRequest, LiveLocation, FinanceTransaction, RealtimeNotification, BuddyRequest } from '../types';
 
 export enum OperationType {
@@ -40,6 +40,12 @@ export interface FirestoreErrorInfo {
   authInfo: {
     userId?: string | null;
     email?: string | null;
+  }
+}
+
+function checkFirebaseInit() {
+  if (initError) {
+    throw new Error(`Firebase initialization error: ${initError.message}`);
   }
 }
 
@@ -189,6 +195,7 @@ export const DEFAULT_USERS: User[] = [
 ];
 
 export async function seedMockUsers() {
+  if (initError) return;
   const path = 'users';
   try {
     for (const u of DEFAULT_USERS) {
@@ -204,6 +211,9 @@ export async function seedMockUsers() {
 }
 
 export function subscribeToUsers(onUpdate: (users: User[]) => void) {
+  if (initError) {
+    return () => {};
+  }
   const path = 'users';
   return onSnapshot(collection(db, 'users'), (snapshot) => {
     const users: User[] = [];
@@ -347,6 +357,9 @@ export async function removeBuddy(userId: string, buddyId: string) {
 // ---------------- BUDDY REQUEST OPERATIONS ----------------
 
 export function subscribeToBuddyRequests(userId: string, onUpdate: (requests: BuddyRequest[]) => void) {
+  if (initError) {
+    return () => {};
+  }
   const path = 'buddy_requests';
   const q = query(
     collection(db, 'buddy_requests'),
@@ -495,6 +508,9 @@ export async function updateTrip(tripId: string, updates: Partial<Trip>) {
 }
 
 export function subscribeToTrips(onUpdate: (trips: Trip[]) => void) {
+  if (initError) {
+    return () => {};
+  }
   const path = 'trips';
   return onSnapshot(collection(db, 'trips'), (snapshot) => {
     const trips: Trip[] = [];
@@ -710,6 +726,9 @@ export async function updateLiveLocation(tripId: string, userId: string, locatio
 // ---------------- FINANCE OPERATIONS ----------------
 
 export function subscribeToFinances(userId: string | undefined, onUpdate: (transactions: FinanceTransaction[]) => void) {
+  if (initError) {
+    return () => {};
+  }
   const path = 'finances';
   if (!userId) {
     onUpdate([]);
@@ -780,6 +799,9 @@ export async function createNotification(notif: Omit<RealtimeNotification, 'id'>
 }
 
 export function subscribeToNotifications(userId: string, onUpdate: (notifs: RealtimeNotification[]) => void) {
+  if (initError) {
+    return () => {};
+  }
   const path = 'notifications';
   const q = query(collection(db, 'notifications'), where('recipientId', '==', userId));
   return onSnapshot(q, (snapshot) => {

@@ -16,7 +16,7 @@ import {
   subscribeToBuddyRequests
 } from './services/db';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth, initError } from './firebase';
 import { User, Trip, FinanceTransaction, RealtimeNotification, BuddyRequest } from './types';
 import TripCard from './components/TripCard';
 import TripForm from './components/TripForm';
@@ -103,9 +103,15 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
   const [authError, setAuthError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [firebaseInitError, setFirebaseInitError] = useState<Error | null>(initError);
 
   // Initialize and listen to real auth state
   useEffect(() => {
+    if (initError) {
+      setAuthLoading(false);
+      return;
+    }
+
     const initializeApp = async () => {
       // Seed default user documents in the background if they do not exist
       try {
@@ -142,6 +148,14 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
         }
       } else {
         setCurrentUser(null);
+      }
+      setAuthLoading(false);
+    }, (error) => {
+      console.error("Auth state observation error:", error);
+      if (error.message.includes('invalid-api-key') || error.message.includes('API key') || error.message.includes('invalid api key')) {
+        setFirebaseInitError(error);
+      } else {
+        setAuthError(error.message);
       }
       setAuthLoading(false);
     });
@@ -289,6 +303,50 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
   const handleMarkRead = async (notifId: string) => {
     await markNotificationAsRead(notifId);
   };
+
+  if (firebaseInitError) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 md:p-8 antialiased">
+        <div className="w-full max-w-xl bg-slate-900 border border-red-500/30 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden" id="firebase-error-container">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/5 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="flex flex-col items-center text-center space-y-6">
+            <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center border border-red-500/20">
+              <Shield className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
+                {language === 'en' ? 'Firebase Configuration Required' : 'Firebase Kurulumu Gerekli'}
+              </h1>
+              <p className="text-slate-400 text-xs md:text-sm leading-relaxed">
+                {language === 'en' 
+                  ? 'The Firebase API Key is missing or invalid. Please complete the Firebase setup from the AI Studio UI to provision your database and authentication keys.' 
+                  : 'Firebase API Anahtarı eksik veya geçersiz. Lütfen veritabanınızı ve kimlik doğrulama anahtarlarınızı otomatik olarak oluşturmak için AI Studio arayüzündeki Firebase kurulumunu tamamlayın.'}
+              </p>
+            </div>
+            
+            <div className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 text-left space-y-3 font-mono text-[10px] text-slate-400 leading-normal">
+              <div className="flex justify-between border-b border-slate-800/80 pb-2">
+                <span className="text-red-400 font-bold">{language === 'en' ? 'Error Code:' : 'Hata Kodu:'}</span>
+                <span>auth/invalid-api-key</span>
+              </div>
+              <div className="pt-1">
+                <p className="text-slate-500 font-sans font-semibold uppercase text-[9px] tracking-wider mb-1">{language === 'en' ? 'How to resolve:' : 'Çözüm Adımları:'}</p>
+                <ol className="list-decimal list-inside space-y-1 font-sans text-xs text-slate-300">
+                  <li>{language === 'en' ? 'Find the Firebase setup UI in the sidebar or prompt panel.' : 'Sol veya alt paneldeki Firebase Kurulumu arayüzünü bulun.'}</li>
+                  <li>{language === 'en' ? 'Approve and accept the Firebase terms to provision resources.' : 'Kaynakları oluşturmak için Firebase şartlarını kabul edip onaylayın.'}</li>
+                  <li>{language === 'en' ? 'The system will automatically configure your credentials.' : 'Sistem gerekli anahtarları otomatik olarak güncelleyecektir.'}</li>
+                </ol>
+              </div>
+            </div>
+            
+            <div className="text-[10px] text-slate-500 font-mono">
+              Caraba v2.0 • Security Guard Enabled
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (authLoading) {
     return (
