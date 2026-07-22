@@ -5,7 +5,7 @@ import { updateLiveLocation, completeTrip } from '../services/db';
 import { 
   Navigation, MapPin, Check, Compass, Play, Pause, RefreshCw, Crosshair, 
   Maximize2, Minimize2, X, ArrowRight, ShieldCheck, Gauge, LocateFixed, 
-  Locate, Eye, Route, Radio, Footprints 
+  Locate, Eye, Route, Radio, Footprints, ChevronDown, ChevronUp 
 } from 'lucide-react';
 import L from 'leaflet';
 import { fetchRoadRoute, interpolateAlongRoad, getUserLocation, getHaversineDistance } from '../services/routing';
@@ -25,6 +25,8 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
   const [currentSpeed, setCurrentSpeed] = useState(48); // simulated live driving speed in km/h
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [autoCenterLock, setAutoCenterLock] = useState(true); // Auto-lock map center to user location
+  const [userAccessRoadCoords, setUserAccessRoadCoords] = useState<[number, number][]>([]);
+  const [isTelemetryOpen, setIsTelemetryOpen] = useState(false);
 
   const stops = trip.stops || [];
   const hasStops = stops.length >= 2;
@@ -102,6 +104,34 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
         setLoadingRoad(false);
       });
   }, [trip.id, stops]);
+
+  // Fetch real road route from user location to trip starting stop
+  useEffect(() => {
+    const startStop = stops.length > 0 ? stops[0] : null;
+    if (!userLocation || !startStop) {
+      setUserAccessRoadCoords([]);
+      return;
+    }
+
+    let isSubscribed = true;
+    fetchRoadRoute([
+      { lat: userLocation.lat, lng: userLocation.lng },
+      { lat: startStop.lat, lng: startStop.lng }
+    ]).then(res => {
+      if (isSubscribed && res.coordinates && res.coordinates.length > 0) {
+        setUserAccessRoadCoords(res.coordinates);
+      }
+    }).catch(err => {
+      console.warn("User access route fetch error:", err);
+      if (isSubscribed) {
+        setUserAccessRoadCoords([[userLocation.lat, userLocation.lng], [startStop.lat, startStop.lng]]);
+      }
+    });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [userLocation?.lat, userLocation?.lng, stops]);
 
   // OpenStreetMap leaflet map logic
   const mapContainerId = `map-${trip.id}`;
@@ -279,7 +309,7 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
     });
   }, [liveLocations]);
 
-  // Initialize Fullscreen Navigation Drive Map
+  // 1. Initialize Fullscreen Navigation Drive Map Instance
   useEffect(() => {
     if (!isDriveModeOpen) return;
 
@@ -298,99 +328,22 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
           attributionControl: false
         });
 
-        // Add vibrant OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19
         }).addTo(map);
 
-        // Turn off auto center lock when user manually drags the map
         map.on('dragstart', () => {
           setAutoCenterLock(false);
         });
 
+        fsStopsLayerRef.current = L.layerGroup().addTo(map);
+        fsLiveLayerRef.current = L.layerGroup().addTo(map);
+
         fsMapRef.current = map;
       }
 
-      const fsMap = fsMapRef.current;
-      fsMap.invalidateSize();
-
-      // Render road polyline in bright neon blue
-      const latLngs = roadCoords.length > 0 ? roadCoords : stops.map(s => [s.lat, s.lng] as [number, number]);
-      if (fsPolylineRef.current) {
-        fsPolylineRef.current.setLatLngs(latLngs);
-      } else {
-        fsPolylineRef.current = L.polyline(latLngs, {
-          color: '#1d4ed8',
-          weight: 7,
-          opacity: 0.95,
-          lineCap: 'round',
-          lineJoin: 'round'
-        }).addTo(fsMap);
-      }
-
-      // Render user-specific connector access line from current location to trip start stop
-      const startStop = stops.length > 0 ? stops[0] : null;
-      if (userLocation && startStop) {
-        const accessCoords: [number, number][] = [
-          [userLocation.lat, userLocation.lng],
-          [startStop.lat, startStop.lng]
-        ];
-        if (fsUserAccessPolylineRef.current) {
-          fsUserAccessPolylineRef.current.setLatLngs(accessCoords);
-        } else {
-          fsUserAccessPolylineRef.current = L.polyline(accessCoords, {
-            color: '#10b981', // emerald dashed connector
-            weight: 4,
-            dashArray: '8, 8',
-            opacity: 0.9
-          }).addTo(fsMap);
-        }
-      }
-
-      // Render stops
-      if (!fsStopsLayerRef.current) {
-        fsStopsLayerRef.current = L.layerGroup().addTo(fsMap);
-      }
-      fsStopsLayerRef.current.clearLayers();
-      stops.forEach((stop, idx) => {
-        const icon = createStopIcon(stop.type, idx, stop.address);
-        const marker = L.marker([stop.lat, stop.lng], { icon });
-        fsStopsLayerRef.current?.addLayer(marker);
-      });
-
-      // Render live driver & passenger locations
-      if (!fsLiveLayerRef.current) {
-        fsLiveLayerRef.current = L.layerGroup().addTo(fsMap);
-      }
-      fsLiveLayerRef.current.clearLayers();
-
-      Object.entries(liveLocations).forEach(([uid, loc]) => {
-        if (!loc.active || uid === currentUser.uid) return;
-        const icon = createLiveLocationIcon(loc.role, loc.userName);
-        const marker = L.marker([loc.lat, loc.lng], { icon });
-        fsLiveLayerRef.current?.addLayer(marker);
-      });
-
-      // Render current user's live position
-      if (userLocation) {
-        const userIcon = createUserLocationIcon(currentUser.name, isDriver ? 'Sürücü' : 'Yolcu');
-        if (fsUserMarkerRef.current) {
-          fsUserMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
-        } else {
-          fsUserMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon }).addTo(fsMap);
-        }
-
-        if (autoCenterLock) {
-          fsMap.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
-        }
-      } else if (!autoCenterLock && fsPolylineRef.current) {
-        try {
-          fsMap.fitBounds(fsPolylineRef.current.getBounds(), { padding: [50, 50] });
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    }, 150);
+      fsMapRef.current.invalidateSize();
+    }, 100);
 
     return () => {
       clearTimeout(timer);
@@ -404,7 +357,102 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
         fsUserMarkerRef.current = null;
       }
     };
-  }, [isDriveModeOpen, stops, roadCoords, liveLocations, userLocation, autoCenterLock]);
+  }, [isDriveModeOpen, fullscreenMapId]);
+
+  // 2. Sync Fullscreen Main Route Polyline
+  useEffect(() => {
+    const fsMap = fsMapRef.current;
+    if (!isDriveModeOpen || !fsMap) return;
+
+    const latLngs = roadCoords.length > 0 ? roadCoords : stops.map(s => [s.lat, s.lng] as [number, number]);
+    if (fsPolylineRef.current) {
+      fsPolylineRef.current.setLatLngs(latLngs);
+    } else {
+      fsPolylineRef.current = L.polyline(latLngs, {
+        color: '#1d4ed8',
+        weight: 7,
+        opacity: 0.95,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(fsMap);
+    }
+  }, [isDriveModeOpen, roadCoords, stops]);
+
+  // 3. Sync Fullscreen Stops Layer
+  useEffect(() => {
+    const fsMap = fsMapRef.current;
+    if (!isDriveModeOpen || !fsMap) return;
+
+    if (!fsStopsLayerRef.current) {
+      fsStopsLayerRef.current = L.layerGroup().addTo(fsMap);
+    }
+    fsStopsLayerRef.current.clearLayers();
+
+    stops.forEach((stop, idx) => {
+      const icon = createStopIcon(stop.type, idx, stop.address);
+      const marker = L.marker([stop.lat, stop.lng], { icon });
+      fsStopsLayerRef.current?.addLayer(marker);
+    });
+  }, [isDriveModeOpen, stops]);
+
+  // 4. Sync Fullscreen Other Live Locations
+  useEffect(() => {
+    const fsMap = fsMapRef.current;
+    if (!isDriveModeOpen || !fsMap) return;
+
+    if (!fsLiveLayerRef.current) {
+      fsLiveLayerRef.current = L.layerGroup().addTo(fsMap);
+    }
+    fsLiveLayerRef.current.clearLayers();
+
+    Object.entries(liveLocations).forEach(([uid, loc]) => {
+      if (!loc.active || uid === currentUser.uid) return;
+      const icon = createLiveLocationIcon(loc.role, loc.userName);
+      const marker = L.marker([loc.lat, loc.lng], { icon });
+      fsLiveLayerRef.current?.addLayer(marker);
+    });
+  }, [isDriveModeOpen, liveLocations, currentUser.uid]);
+
+  // 5. Sync User Live Position, User Access Route to Start, and Camera Position
+  useEffect(() => {
+    const fsMap = fsMapRef.current;
+    if (!isDriveModeOpen || !fsMap || !userLocation) return;
+
+    // Render / update user marker position
+    const userIcon = createUserLocationIcon(currentUser.name, isDriver ? 'Sürücü' : 'Yolcu');
+    if (fsUserMarkerRef.current) {
+      fsUserMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
+    } else {
+      fsUserMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon }).addTo(fsMap);
+    }
+
+    // Render / update user access route to start stop using OSRM coordinates
+    const startStop = stops.length > 0 ? stops[0] : null;
+    if (startStop) {
+      const accessCoords: [number, number][] = userAccessRoadCoords.length > 0
+        ? userAccessRoadCoords
+        : [
+            [userLocation.lat, userLocation.lng],
+            [startStop.lat, startStop.lng]
+          ];
+
+      if (fsUserAccessPolylineRef.current) {
+        fsUserAccessPolylineRef.current.setLatLngs(accessCoords);
+      } else {
+        fsUserAccessPolylineRef.current = L.polyline(accessCoords, {
+          color: '#10b981', // emerald road connector
+          weight: 5,
+          dashArray: '8, 8',
+          opacity: 0.95
+        }).addTo(fsMap);
+      }
+    }
+
+    // Smooth map re-centering if lock is active
+    if (autoCenterLock) {
+      fsMap.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
+    }
+  }, [isDriveModeOpen, userLocation, userAccessRoadCoords, autoCenterLock, currentUser.name, isDriver, stops]);
 
   const recenterOnUser = async () => {
     setAutoCenterLock(true);
@@ -579,7 +627,7 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
                 title="Konumumu Ekranın Ortasında Göster"
               >
                 <LocateFixed className={`w-4 h-4 ${autoCenterLock ? 'animate-spin-slow text-slate-950' : ''}`} />
-                <span className="hidden sm:inline">Beni</span> Ortala
+                <span>Ortala</span>
                 {autoCenterLock && <span className="w-2 h-2 bg-slate-950 rounded-full animate-ping"></span>}
               </button>
 
@@ -610,63 +658,82 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
           <div className="relative flex-1 w-full h-full bg-slate-800 overflow-hidden">
             <div id={fullscreenMapId} className="w-full h-full z-10" />
 
-            {/* Floating Action Center Button on Map */}
-            <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 items-end">
+            {/* Floating Action Center Control Panel - Positioned directly above bottom HUD */}
+            <div className="absolute bottom-4 right-4 z-20 flex flex-col gap-2 items-end">
               <button
                 type="button"
                 onClick={recenterOnUser}
-                className={`p-3 rounded-2xl shadow-2xl border transition-all cursor-pointer flex items-center gap-2 font-bold text-xs ${
+                className={`px-4 py-2.5 rounded-2xl shadow-2xl border transition-all cursor-pointer flex items-center gap-2 font-bold text-xs ${
                   autoCenterLock
-                    ? 'bg-indigo-600 text-white border-indigo-400 ring-4 ring-indigo-200/50 shadow-indigo-500/30'
+                    ? 'bg-emerald-600 text-white border-emerald-400 ring-4 ring-emerald-200/50 shadow-emerald-500/30'
                     : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50'
                 }`}
-                title="Beni Haritada Ortala"
+                title="Haritada Ortala"
                 id="floating-recenter-user-btn"
               >
-                <LocateFixed className={`w-5 h-5 ${autoCenterLock ? 'text-white' : 'text-indigo-600'}`} />
-                <span>Beni Ortala</span>
+                <LocateFixed className={`w-4 h-4 ${autoCenterLock ? 'text-white' : 'text-emerald-600'}`} />
+                <span>Ortala</span>
+                {autoCenterLock && <span className="w-2 h-2 bg-emerald-300 rounded-full animate-ping"></span>}
               </button>
 
               <button
                 type="button"
                 onClick={recenterWholeRoute}
-                className="bg-white/95 backdrop-blur-md text-slate-700 p-2.5 rounded-2xl shadow-xl border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1.5 font-semibold text-[11px]"
+                className="bg-white/95 backdrop-blur-md text-slate-700 px-3.5 py-2 rounded-2xl shadow-xl border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1.5 font-semibold text-[11px]"
                 id="floating-recenter-route-btn"
               >
                 <Eye className="w-4 h-4 text-slate-500" />
-                <span>Tüm Harita</span>
+                <span>Tüm Güzergah</span>
               </button>
             </div>
 
-            {/* Realtime User Access Route & Telemetry Card */}
-            <div className="absolute top-4 left-4 z-20 bg-slate-900/90 backdrop-blur-md text-white p-3.5 rounded-2xl border border-slate-700 shadow-2xl max-w-[270px] space-y-2">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-                <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
-                  <Route className="w-3.5 h-3.5" />
-                  KİŞİSEL GÜZERGAH TAKİBİ
-                </span>
-                <span className="text-[9px] text-slate-400 font-bold">Canlı GPS</span>
-              </div>
-
-              {distToStartKm !== null ? (
-                <div className="space-y-1 text-[11px]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 font-medium">Kalkış Noktasına:</span>
-                    <span className="font-bold text-emerald-300">{distToStartKm} km (~{etaToStartMin} dk)</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 font-medium">Sefer Mesafesi:</span>
-                    <span className="font-bold text-indigo-300">{trip.distanceKm} km</span>
-                  </div>
-                  <div className="text-[9px] text-emerald-300 flex items-center gap-1.5 mt-1 bg-emerald-950/80 p-2 rounded-xl border border-emerald-800/60 leading-tight">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
-                    <span>Konumunuzdan kalkış noktasına özel yeşil güzergah çizgisi oluşturuldu.</span>
-                  </div>
+            {/* Expandable/Collapsible Realtime User Access Route & Telemetry Card */}
+            <div className="absolute top-4 left-4 z-20 bg-slate-900/90 backdrop-blur-md text-white rounded-2xl border border-slate-700 shadow-2xl overflow-hidden max-w-[280px]">
+              <button
+                type="button"
+                onClick={() => setIsTelemetryOpen(!isTelemetryOpen)}
+                className="w-full px-3.5 py-2.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/80 transition-colors cursor-pointer"
+                id="toggle-telemetry-card-btn"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <Route className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 truncate">
+                    Kişisel Güzergah Takibi
+                  </span>
                 </div>
-              ) : (
-                <p className="text-[10px] text-slate-300 italic">
-                  GPS konumunuz alınıyor... Sefer noktasına canlı bağlantı kuruluyor.
-                </p>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  {isTelemetryOpen ? (
+                    <ChevronUp className="w-4 h-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                  )}
+                </div>
+              </button>
+
+              {isTelemetryOpen && (
+                <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-slate-800 animate-fadeIn">
+                  {distToStartKm !== null ? (
+                    <div className="space-y-1.5 text-[11px]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 font-medium">Kalkış Noktasına:</span>
+                        <span className="font-bold text-emerald-300">{distToStartKm} km (~{etaToStartMin} dk)</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 font-medium">Sefer Mesafesi:</span>
+                        <span className="font-bold text-indigo-300">{trip.distanceKm} km</span>
+                      </div>
+                      <div className="text-[9px] text-emerald-300 flex items-center gap-1.5 mt-1 bg-emerald-950/80 p-2 rounded-xl border border-emerald-800/60 leading-tight">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+                        <span>Konumunuzdan kalkış noktasına gerçek karayolu rotası gösteriliyor.</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-300 italic">
+                      GPS konumunuz alınıyor... Sefer noktasına canlı bağlantı kuruluyor.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
