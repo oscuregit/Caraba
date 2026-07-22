@@ -22,7 +22,7 @@ import {
   signInWithPopup
 } from 'firebase/auth';
 import { db, auth, initError } from '../firebase';
-import { User, Trip, RouteStop, JoinRequest, LiveLocation, FinanceTransaction, RealtimeNotification, BuddyRequest } from '../types';
+import { User, Trip, RouteStop, JoinRequest, LiveLocation, FinanceTransaction, RealtimeNotification, BuddyRequest, Vehicle } from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -837,5 +837,59 @@ export async function markNotificationAsRead(notifId: string) {
     await updateDoc(doc(db, 'notifications', notifId), { read: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+// ---------------- VEHICLE OPERATIONS ----------------
+
+export function subscribeToVehicles(userId: string, onUpdate: (vehicles: Vehicle[]) => void) {
+  if (initError || !userId) {
+    onUpdate([]);
+    return () => {};
+  }
+  const path = 'vehicles';
+  const q = query(collection(db, 'vehicles'), where('userId', '==', userId));
+  return onSnapshot(q, (snapshot) => {
+    const list: Vehicle[] = [];
+    snapshot.forEach((docSnap) => {
+      list.push({ id: docSnap.id, ...docSnap.data() } as Vehicle);
+    });
+    list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    onUpdate(list);
+  }, (err) => {
+    console.error(`[Firestore Vehicles Subscription Warning] for user ${userId}:`, err);
+    onUpdate([]);
+  });
+}
+
+export async function addVehicle(vehicle: Omit<Vehicle, 'id' | 'createdAt'>): Promise<string> {
+  const path = 'vehicles';
+  try {
+    const docRef = await addDoc(collection(db, 'vehicles'), {
+      ...vehicle,
+      createdAt: Date.now()
+    });
+    return docRef.id;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+    throw err;
+  }
+}
+
+export async function updateVehicle(id: string, updates: Partial<Vehicle>): Promise<void> {
+  const path = `vehicles/${id}`;
+  try {
+    await updateDoc(doc(db, 'vehicles', id), updates);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteVehicle(id: string): Promise<void> {
+  const path = `vehicles/${id}`;
+  try {
+    await deleteDoc(doc(db, 'vehicles', id));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
   }
 }

@@ -4,6 +4,7 @@ import {
   subscribeToTrips, 
   subscribeToFinances, 
   subscribeToNotifications, 
+  subscribeToVehicles,
   seedMockUsers, 
   DEFAULT_USERS,
   markNotificationAsRead,
@@ -17,11 +18,12 @@ import {
 } from './services/db';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, initError } from './firebase';
-import { User, Trip, FinanceTransaction, RealtimeNotification, BuddyRequest } from './types';
+import { User, Trip, FinanceTransaction, RealtimeNotification, BuddyRequest, Vehicle } from './types';
 import TripCard from './components/TripCard';
 import TripForm from './components/TripForm';
 import BuddySelector from './components/BuddySelector';
 import FinanceSummary from './components/FinanceSummary';
+import VehicleManager from './components/VehicleManager';
 import SettingsModal from './components/SettingsModal';
 import { LanguageProvider, useLanguage } from './LanguageContext';
 import { 
@@ -36,7 +38,8 @@ import {
   Shield, 
   Check, 
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  Gauge
 } from 'lucide-react';
 
 export default function App() {
@@ -83,15 +86,17 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
   const [notifications, setNotifications] = useState<RealtimeNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [buddyRequests, setBuddyRequests] = useState<BuddyRequest[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
 
   // Layout View Tabs
-  const [activeTab, setActiveTab] = useState<'trips' | 'buddies' | 'finances'>('trips');
+  const [activeTab, setActiveTab] = useState<'trips' | 'vehicles' | 'buddies' | 'finances'>('trips');
   const [tripSubTab, setTripSubTab] = useState<'active' | 'scheduled' | 'completed'>('active');
   
   // Modals state
   const [showTripForm, setShowTripForm] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | undefined>(undefined);
   const [repeatingTrip, setRepeatingTrip] = useState<Trip | undefined>(undefined);
+  const [preselectedVehicleId, setPreselectedVehicleId] = useState<string | undefined>(undefined);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -188,10 +193,16 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
       setFinances(financesList);
     });
 
+    // 4. Subscribe to Vehicles
+    const unsubVehicles = subscribeToVehicles(currentUser?.uid || '', (vehiclesList) => {
+      setVehicles(vehiclesList);
+    });
+
     return () => {
       unsubUsers();
       unsubTrips();
       unsubFinances();
+      unsubVehicles();
     };
   }, [currentUser?.uid]);
 
@@ -614,6 +625,14 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
                 <Car className="w-5 h-5" />
               </button>
               <button 
+                onClick={() => setActiveTab('vehicles')}
+                className={`p-3 rounded-xl cursor-pointer transition-all flex justify-center ${activeTab === 'vehicles' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                title={t('tab_vehicles')}
+                id="desktop-nav-vehicles"
+              >
+                <Gauge className="w-5 h-5" />
+              </button>
+              <button 
                 onClick={() => setActiveTab('buddies')}
                 className={`p-3 rounded-xl cursor-pointer transition-all flex justify-center ${activeTab === 'buddies' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                 title={t('tab_buddies')}
@@ -788,199 +807,223 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
             </div>
           </header>
 
-          {/* Core Widescreen Bento Grid */}
-          <div className="flex-1 grid grid-cols-12 gap-5 overflow-y-auto pr-2 pb-4">
-            
-            {/* Bento Block 1: Trips List with Tabs (col-span-8) */}
-            <div className="col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
-              {/* Header Title bar */}
-              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center pb-2">
-                <span className="font-display font-bold text-slate-700 text-xs flex items-center gap-2 uppercase tracking-wide">
-                  <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-pulse"></span>
-                  {language === 'en' ? 'Carpool Journeys' : 'Carpool Seferleri'}
-                </span>
-                <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">
-                  {filteredTrips.length} {language === 'en' ? 'Total' : 'Toplam'}
-                </span>
-              </div>
-
-              {/* Subtabs switcher */}
-              <div className="flex border-b border-slate-100 bg-white p-2 gap-1.5 shrink-0">
-                <button
-                  onClick={() => setTripSubTab('active')}
-                  className={`flex-1 py-2.5 px-3 text-center rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                    tripSubTab === 'active'
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
-                      : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
-                  }`}
-                  id="tab-active-trips"
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${tripSubTab === 'active' ? 'animate-pulse' : ''}`}></span>
-                  {language === 'en' ? 'Active Trip' : 'Aktif Yolculuk'}
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tripSubTab === 'active' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
-                    {activeTripsList.length}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setTripSubTab('scheduled')}
-                  className={`flex-1 py-2.5 px-3 text-center rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                    tripSubTab === 'scheduled'
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
-                      : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
-                  }`}
-                  id="tab-scheduled-trips"
-                >
-                  {language === 'en' ? 'Planned' : 'Planlanan'}
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tripSubTab === 'scheduled' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
-                    {scheduledTripsList.length}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setTripSubTab('completed')}
-                  className={`flex-1 py-2.5 px-3 text-center rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                    tripSubTab === 'completed'
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
-                      : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
-                  }`}
-                  id="tab-completed-trips"
-                >
-                  {language === 'en' ? 'Completed' : 'Tamamlanan'}
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tripSubTab === 'completed' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
-                    {completedTripsList.length}
-                  </span>
-                </button>
-              </div>
+          {/* Desktop Main View Switcher */}
+          {activeTab === 'vehicles' ? (
+            <div className="flex-1 overflow-y-auto pr-2 pb-4" id="desktop-view-vehicles">
+              <VehicleManager 
+                currentUser={activeUser} 
+                vehicles={vehicles}
+                onStartTripWithVehicle={(v) => {
+                  setPreselectedVehicleId(v.id);
+                  setEditingTrip(undefined);
+                  setRepeatingTrip(undefined);
+                  setShowTripForm(true);
+                }}
+              />
+            </div>
+          ) : activeTab === 'buddies' ? (
+            <div className="flex-1 overflow-y-auto bg-white rounded-2xl p-6 shadow-sm border border-slate-200" id="desktop-view-buddies">
+              <BuddySelector currentUser={activeUser} allUsers={allUsers} />
+            </div>
+          ) : activeTab === 'finances' ? (
+            <div className="flex-1 overflow-y-auto bg-white rounded-2xl p-6 shadow-sm border border-slate-200" id="desktop-view-finances">
+              <FinanceSummary currentUser={activeUser} transactions={finances} />
+            </div>
+          ) : (
+            /* Core Widescreen Bento Grid (trips tab) */
+            <div className="flex-1 grid grid-cols-12 gap-5 overflow-y-auto pr-2 pb-4">
               
-              <div className="flex-1 p-5 overflow-y-auto bg-slate-50/20">
-                {currentSubTabTrips.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-6 opacity-80 min-h-[250px]">
-                    <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-xl flex items-center justify-center mb-3">
-                      <Car className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-xs font-display font-bold text-slate-700">
-                      {tripSubTab === 'active' ? (language === 'en' ? 'No Active Trips' : 'Aktif Yolculuk Yok') :
-                       tripSubTab === 'scheduled' ? (language === 'en' ? 'No Planned Trips' : 'Planlanmış Yolculuk Yok') :
-                       (language === 'en' ? 'No Completed Trips' : 'Tamamlanmış Yolculuk Yok')}
-                    </h3>
-                    <p className="text-[10px] text-slate-400 mt-1 max-w-[280px]">
-                      {tripSubTab === 'active' ? (language === 'en' ? 'There is no active journey right now.' : 'Şu anda yolda olan aktif bir carpool yolculuğu bulunmuyor.') :
-                       tripSubTab === 'scheduled' ? (language === 'en' ? 'There are no planned routes. You can create a new route!' : 'İleri tarihli planlanmış bir carpool seferi bulunmuyor. Yeni bir rota oluşturabilirsiniz!') :
-                       (language === 'en' ? 'You have not completed any carpool journeys yet.' : 'Daha önce tamamlenmiş bir carpool yolculuğunuz bulunmamaktadır.')}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    {currentSubTabTrips.map((trip) => (
-                      <TripCard 
-                        key={trip.id} 
-                        trip={trip} 
-                        currentUser={activeUser}
-                        allUsers={allUsers}
-                        onEdit={handleOpenEdit}
-                        onRepeat={handleOpenRepeat}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Bento Block 2: Road Buddies (col-span-4) */}
-            <div className="col-span-4 bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col overflow-hidden max-h-[380px]">
-              <h3 className="text-xs font-display font-bold text-slate-500 mb-3 flex items-center gap-2 uppercase tracking-wider border-b border-slate-50 pb-2">
-                <Users className="w-4 h-4 text-indigo-500" />
-                {t('buddies_title')}
-              </h3>
-              <div className="flex-1 overflow-y-auto pr-1">
-                <BuddySelector currentUser={activeUser} allUsers={allUsers} />
-              </div>
-            </div>
-
-            {/* Bento Block 3: Quick Access Widget (col-span-4) */}
-            <div className="col-span-4 bg-indigo-600 rounded-2xl shadow-lg p-5 flex flex-col justify-between text-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-6 -mt-6 pointer-events-none"></div>
-              <div>
-                <span className="text-[10px] font-display font-bold text-indigo-200 uppercase tracking-widest bg-indigo-500/30 px-2 py-0.5 rounded-full w-max block mb-2">
-                  {language === 'en' ? 'Quick Access' : 'Hızlı Erişim'}
-                </span>
-                <h3 className="text-lg font-display font-bold leading-tight">{language === 'en' ? 'Start Morning Commute' : 'Sabah Rutinini Başlat'}</h3>
-                <p className="text-indigo-100 text-xs mt-1.5 leading-relaxed">
-                  {language === 'en' ? 'Quickly start a carpool commute and invite your workplace buddy group!' : 'İş yeri carpool yolculuğunu hızlıca başlatıp co-worker grubuna anında davetiye gönderin!'}
-                </p>
-              </div>
-              <div className="flex gap-2 mt-4 z-10">
-                <button 
-                  onClick={() => {
-                    const samplePreset = trips.find(t => t.driverId === activeUser.uid) || trips[0];
-                    if (samplePreset) {
-                      handleOpenRepeat(samplePreset);
-                    } else {
-                      setEditingTrip(undefined);
-                      setRepeatingTrip(undefined);
-                      setShowTripForm(true);
-                    }
-                  }}
-                  className="flex-1 bg-white text-indigo-600 py-2.5 rounded-xl font-display font-bold text-xs hover:bg-indigo-50 shadow-inner transition-all cursor-pointer text-center"
-                >
-                  {language === 'en' ? 'START NOW' : 'ŞİMDİ BAŞLAT'}
-                </button>
-              </div>
-            </div>
-
-            {/* Bento Block 4: Finance Tracker (col-span-8) */}
-            <div className="col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col overflow-hidden min-h-[320px]">
-              <div className="flex justify-between items-center mb-4 border-b border-slate-50 pb-3">
-                <div>
-                  <h3 className="text-xs font-display font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                    <DollarSign className="w-4 h-4 text-emerald-500" />
-                    {language === 'en' ? 'Trip Finance & Payments' : 'Yolculuk Finansı & Ödemeler'}
-                  </h3>
-                  <p className="text-[10px] text-slate-400">{language === 'en' ? 'Carpool cost sharing and payment transfer list' : 'Carpool masraf bölüşümleri ve ödeme transfer listesi'}</p>
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto pr-1">
-                <FinanceSummary currentUser={activeUser} transactions={finances} />
-              </div>
-            </div>
-
-            {/* Bento Block 5: Fuel Stats / Yakıt Raporu (col-span-4) */}
-            <div className="col-span-4 bg-slate-900 rounded-2xl shadow-xl p-5 flex flex-col justify-between text-white min-h-[320px] relative overflow-hidden border border-slate-800">
-              <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl pointer-events-none"></div>
-              <div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-indigo-400 text-[10px] font-display font-black uppercase tracking-widest">{language === 'en' ? 'FUEL REPORT' : 'YAKIT RAPORU'}</p>
-                    <p className="text-slate-400 text-xs font-medium">{language === 'en' ? 'July 2026' : 'Temmuz 2026'}</p>
-                  </div>
-                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                    {language === 'en' ? '-14% Savings' : '-14% Tasarruf'}
+              {/* Bento Block 1: Trips List with Tabs (col-span-8) */}
+              <div className="col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+                {/* Header Title bar */}
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center pb-2">
+                  <span className="font-display font-bold text-slate-700 text-xs flex items-center gap-2 uppercase tracking-wide">
+                    <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-pulse"></span>
+                    {language === 'en' ? 'Carpool Journeys' : 'Carpool Seferleri'}
                   </span>
+                  <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">
+                    {filteredTrips.length} {language === 'en' ? 'Total' : 'Toplam'}
+                  </span>
+                </div>
+
+                {/* Subtabs switcher */}
+                <div className="flex border-b border-slate-100 bg-white p-2 gap-1.5 shrink-0">
+                  <button
+                    onClick={() => setTripSubTab('active')}
+                    className={`flex-1 py-2.5 px-3 text-center rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      tripSubTab === 'active'
+                        ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
+                        : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
+                    }`}
+                    id="tab-active-trips"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${tripSubTab === 'active' ? 'animate-pulse' : ''}`}></span>
+                    {language === 'en' ? 'Active Trip' : 'Aktif Yolculuk'}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tripSubTab === 'active' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
+                      {activeTripsList.length}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setTripSubTab('scheduled')}
+                    className={`flex-1 py-2.5 px-3 text-center rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      tripSubTab === 'scheduled'
+                        ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
+                        : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
+                    }`}
+                    id="tab-scheduled-trips"
+                  >
+                    {language === 'en' ? 'Planned' : 'Planlanan'}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tripSubTab === 'scheduled' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
+                      {scheduledTripsList.length}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setTripSubTab('completed')}
+                    className={`flex-1 py-2.5 px-3 text-center rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      tripSubTab === 'completed'
+                        ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
+                        : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-50'
+                    }`}
+                    id="tab-completed-trips"
+                  >
+                    {language === 'en' ? 'Completed' : 'Tamamlanan'}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tripSubTab === 'completed' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'}`}>
+                      {completedTripsList.length}
+                    </span>
+                  </button>
                 </div>
                 
-                <div className="my-6">
-                  <p className="text-4xl font-display font-black text-white">
-                    {(finances.filter(f => f.status === 'paid').length * 45).toFixed(0)} <span className="text-sm font-normal text-slate-400">zł</span>
-                  </p>
-                  <p className="text-[10px] text-emerald-400 font-bold mt-1 uppercase flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    {language === 'en' ? 'Carpool Eco & Economic Profit' : 'Carpool Çevre ve Ekonomik Kazanç'}
-                  </p>
+                <div className="flex-1 p-5 overflow-y-auto bg-slate-50/20">
+                  {currentSubTabTrips.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-6 opacity-80 min-h-[250px]">
+                      <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-xl flex items-center justify-center mb-3">
+                        <Car className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-xs font-display font-bold text-slate-700">
+                        {tripSubTab === 'active' ? (language === 'en' ? 'No Active Trips' : 'Aktif Yolculuk Yok') :
+                         tripSubTab === 'scheduled' ? (language === 'en' ? 'No Planned Trips' : 'Planlanmış Yolculuk Yok') :
+                         (language === 'en' ? 'No Completed Trips' : 'Tamamlanmış Yolculuk Yok')}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 mt-1 max-w-[280px]">
+                        {tripSubTab === 'active' ? (language === 'en' ? 'There is no active journey right now.' : 'Şu anda yolda olan aktif bir carpool yolculuğu bulunmuyor.') :
+                         tripSubTab === 'scheduled' ? (language === 'en' ? 'There are no planned routes. You can create a new route!' : 'İleri tarihli planlanmış bir carpool seferi bulunmuyor. Yeni bir rota oluşturabilirsiniz!') :
+                         (language === 'en' ? 'You have not completed any carpool journeys yet.' : 'Daha önce tamamlenmiş bir carpool yolculuğunuz bulunmamaktadır.')}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                      {currentSubTabTrips.map((trip) => (
+                        <TripCard 
+                          key={trip.id} 
+                          trip={trip} 
+                          currentUser={activeUser}
+                          allUsers={allUsers}
+                          onEdit={handleOpenEdit}
+                          onRepeat={handleOpenRepeat}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between text-[10px] text-slate-400 font-bold">
-                  <span>{language === 'en' ? 'TARGET FUEL SAVINGS' : 'HEDEF YAKIT TASARRUFU'}</span>
-                  <span>68%</span>
+              {/* Bento Block 2: Road Buddies (col-span-4) */}
+              <div className="col-span-4 bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col overflow-hidden max-h-[380px]">
+                <h3 className="text-xs font-display font-bold text-slate-500 mb-3 flex items-center gap-2 uppercase tracking-wider border-b border-slate-50 pb-2">
+                  <Users className="w-4 h-4 text-indigo-500" />
+                  {t('buddies_title')}
+                </h3>
+                <div className="flex-1 overflow-y-auto pr-1">
+                  <BuddySelector currentUser={activeUser} allUsers={allUsers} />
                 </div>
-                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-indigo-500 h-full rounded-full" style={{ width: "68%" }}></div>
-                </div>
-                <p className="text-slate-500 text-[9px] text-center font-bold">{language === 'en' ? 'TARGET: 550 zł' : 'HEDEF: 550 zł'}</p>
               </div>
+
+              {/* Bento Block 3: Quick Access Widget (col-span-4) */}
+              <div className="col-span-4 bg-indigo-600 rounded-2xl shadow-lg p-5 flex flex-col justify-between text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-6 -mt-6 pointer-events-none"></div>
+                <div>
+                  <span className="text-[10px] font-display font-bold text-indigo-200 uppercase tracking-widest bg-indigo-500/30 px-2 py-0.5 rounded-full w-max block mb-2">
+                    {language === 'en' ? 'Quick Access' : 'Hızlı Erişim'}
+                  </span>
+                  <h3 className="text-lg font-display font-bold leading-tight">{language === 'en' ? 'Start Morning Commute' : 'Sabah Rutinini Başlat'}</h3>
+                  <p className="text-indigo-100 text-xs mt-1.5 leading-relaxed">
+                    {language === 'en' ? 'Quickly start a carpool commute and invite your workplace buddy group!' : 'İş yeri carpool yolculuğunu hızlıca başlatıp co-worker grubuna anında davetiye gönderin!'}
+                  </p>
+                </div>
+                <div className="flex gap-2 mt-4 z-10">
+                  <button 
+                    onClick={() => {
+                      const samplePreset = trips.find(t => t.driverId === activeUser.uid) || trips[0];
+                      if (samplePreset) {
+                        handleOpenRepeat(samplePreset);
+                      } else {
+                        setEditingTrip(undefined);
+                        setRepeatingTrip(undefined);
+                        setShowTripForm(true);
+                      }
+                    }}
+                    className="flex-1 bg-white text-indigo-600 py-2.5 rounded-xl font-display font-bold text-xs hover:bg-indigo-50 shadow-inner transition-all cursor-pointer text-center"
+                  >
+                    {language === 'en' ? 'START NOW' : 'ŞİMDİ BAŞLAT'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Bento Block 4: Finance Tracker (col-span-8) */}
+              <div className="col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col overflow-hidden min-h-[320px]">
+                <div className="flex justify-between items-center mb-4 border-b border-slate-50 pb-3">
+                  <div>
+                    <h3 className="text-xs font-display font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-emerald-500" />
+                      {language === 'en' ? 'Trip Finance & Payments' : 'Yolculuk Finansı & Ödemeler'}
+                    </h3>
+                    <p className="text-[10px] text-slate-400">{language === 'en' ? 'Carpool cost sharing and payment transfer list' : 'Carpool masraf bölüşümleri ve ödeme transfer listesi'}</p>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto pr-1">
+                  <FinanceSummary currentUser={activeUser} transactions={finances} />
+                </div>
+              </div>
+
+              {/* Bento Block 5: Fuel Stats / Yakıt Raporu (col-span-4) */}
+              <div className="col-span-4 bg-slate-900 rounded-2xl shadow-xl p-5 flex flex-col justify-between text-white min-h-[320px] relative overflow-hidden border border-slate-800">
+                <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl pointer-events-none"></div>
+                <div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-indigo-400 text-[10px] font-display font-black uppercase tracking-widest">{language === 'en' ? 'FUEL REPORT' : 'YAKIT RAPORU'}</p>
+                      <p className="text-slate-400 text-xs font-medium">{language === 'en' ? 'July 2026' : 'Temmuz 2026'}</p>
+                    </div>
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      {language === 'en' ? '-14% Savings' : '-14% Tasarruf'}
+                    </span>
+                  </div>
+                  
+                  <div className="my-6">
+                    <p className="text-4xl font-display font-black text-white">
+                      {(finances.filter(f => f.status === 'paid').length * 45).toFixed(0)} <span className="text-sm font-normal text-slate-400">TL</span>
+                    </p>
+                    <p className="text-[10px] text-emerald-400 font-bold mt-1 uppercase flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      {language === 'en' ? 'Carpool Eco & Economic Profit' : 'Carpool Çevre ve Ekonomik Kazanç'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] text-slate-400 font-bold">
+                    <span>{language === 'en' ? 'TARGET FUEL SAVINGS' : 'HEDEF YAKIT TASARRUFU'}</span>
+                    <span>68%</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-indigo-500 h-full rounded-full" style={{ width: "68%" }}></div>
+                  </div>
+                  <p className="text-slate-500 text-[9px] text-center font-bold">{language === 'en' ? 'TARGET: 550 TL' : 'HEDEF: 550 TL'}</p>
+                </div>
+              </div>
+
             </div>
-
-          </div>
+          )}
         </main>
       </div>
 
@@ -1237,6 +1280,21 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
             </div>
           )}
 
+          {activeTab === 'vehicles' && (
+            <div id="view-vehicles" className="p-4">
+              <VehicleManager 
+                currentUser={activeUser} 
+                vehicles={vehicles}
+                onStartTripWithVehicle={(v) => {
+                  setPreselectedVehicleId(v.id);
+                  setEditingTrip(undefined);
+                  setRepeatingTrip(undefined);
+                  setShowTripForm(true);
+                }}
+              />
+            </div>
+          )}
+
           {activeTab === 'buddies' && (
             <div id="view-buddies">
               <BuddySelector currentUser={activeUser} allUsers={allUsers} />
@@ -1252,7 +1310,7 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
         </main>
 
         {/* Global Bottom Navigation Menu (Premium Style) */}
-        <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-6 py-2.5 flex justify-between items-center sticky z-40 shadow-xl">
+        <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-4 py-2.5 flex justify-around items-center sticky z-40 shadow-xl">
           
           <button
             onClick={() => setActiveTab('trips')}
@@ -1263,6 +1321,17 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
           >
             <Car className="w-5 h-5" />
             <span className="text-[9px] font-display font-bold">{t('tab_trips')}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('vehicles')}
+            className={`flex flex-col items-center gap-1 cursor-pointer transition-all ${
+              activeTab === 'vehicles' ? 'text-indigo-600 scale-105' : 'text-gray-400 hover:text-gray-600'
+            }`}
+            id="nav-vehicles"
+          >
+            <Gauge className="w-5 h-5" />
+            <span className="text-[9px] font-display font-bold">{t('tab_vehicles')}</span>
           </button>
 
           <button
@@ -1299,9 +1368,11 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
             setShowTripForm(false);
             setEditingTrip(undefined);
             setRepeatingTrip(undefined);
+            setPreselectedVehicleId(undefined);
           }}
           editingTrip={editingTrip}
           repeatingTrip={repeatingTrip}
+          preselectedVehicleId={preselectedVehicleId}
         />
       )}
 

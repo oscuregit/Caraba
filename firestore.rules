@@ -21,7 +21,7 @@ service cloud.firestore {
 
     // 1. USERS COLLECTION
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && (userId == request.auth.uid || userId.matches('^custom_.*'));
       allow update: if isSignedIn() && (userId == request.auth.uid || userId.matches('^custom_.*') || incoming().buddies != null);
       allow delete: if isSignedIn() && (userId == request.auth.uid || userId.matches('^custom_.*'));
@@ -29,37 +29,45 @@ service cloud.firestore {
 
     // 2. BUDDY REQUESTS COLLECTION
     match /buddy_requests/{requestId} {
-      allow read, list: if isSignedIn() && (resource.data.fromId == request.auth.uid || resource.data.toId == request.auth.uid);
-      allow create: if isSignedIn() && request.auth.uid == incoming().fromId && (incoming().status == 'pending' || (incoming().status == 'accepted' && incoming().toId.matches('^custom_.*')));
-      allow update: if isSignedIn() && (request.auth.uid == existing().toId || existing().toId.matches('^custom_.*')) && incoming().status in ['accepted', 'declined', 'pending'];
-      allow delete: if isSignedIn() && (existing().fromId == request.auth.uid || existing().toId == request.auth.uid);
+      allow read: if true;
+      allow create: if isSignedIn() && (request.auth.uid == incoming().fromId || incoming().fromId.matches('^custom_.*'));
+      allow update: if isSignedIn() && (request.auth.uid == existing().toId || existing().toId.matches('^custom_.*'));
+      allow delete: if isSignedIn() && (existing().fromId == request.auth.uid || existing().toId == request.auth.uid || existing().fromId.matches('^custom_.*'));
     }
 
     // 3. TRIPS COLLECTION
     match /trips/{tripId} {
-      allow read, list: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == incoming().driverId;
+      allow read: if true;
+      allow create: if isSignedIn() && (request.auth.uid == incoming().driverId || incoming().driverId.matches('^custom_.*'));
       allow update: if isSignedIn() && (
         request.auth.uid == existing().driverId ||
+        existing().driverId.matches('^custom_.*') ||
         incoming().diff(existing()).affectedKeys().hasAny(['requests', 'passengers', 'liveLocations'])
       );
-      allow delete: if isSignedIn() && request.auth.uid == existing().driverId;
+      allow delete: if isSignedIn() && (request.auth.uid == existing().driverId || existing().driverId.matches('^custom_.*'));
     }
 
     // 4. FINANCES COLLECTION
     match /finances/{financeId} {
-      allow read, list: if isSignedIn() && (resource.data.payerId == request.auth.uid || resource.data.receiverId == request.auth.uid);
-      allow create: if isSignedIn() && (incoming().receiverId == request.auth.uid || incoming().payerId == request.auth.uid);
-      allow update: if isSignedIn() && (existing().receiverId == request.auth.uid || existing().payerId == request.auth.uid);
-      allow delete: if isSignedIn() && (existing().receiverId == request.auth.uid || existing().payerId == request.auth.uid);
+      allow read: if true;
+      allow create: if isSignedIn() && (incoming().receiverId == request.auth.uid || incoming().payerId == request.auth.uid || incoming().receiverId.matches('^custom_.*') || incoming().payerId.matches('^custom_.*'));
+      allow update: if isSignedIn() && (existing().receiverId == request.auth.uid || existing().payerId == request.auth.uid || existing().receiverId.matches('^custom_.*') || existing().payerId.matches('^custom_.*'));
+      allow delete: if isSignedIn() && (existing().receiverId == request.auth.uid || existing().payerId == request.auth.uid || existing().receiverId.matches('^custom_.*') || existing().payerId.matches('^custom_.*'));
     }
 
     // 5. NOTIFICATIONS COLLECTION
     match /notifications/{notificationId} {
-      allow read, list: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      allow read: if true;
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && existing().recipientId == request.auth.uid;
-      allow delete: if isSignedIn() && existing().recipientId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (existing().recipientId == request.auth.uid || existing().recipientId.matches('^custom_.*'));
+    }
+
+    // 6. VEHICLES COLLECTION
+    match /vehicles/{vehicleId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (request.auth.uid == incoming().userId || incoming().userId.matches('^custom_.*'));
+      allow update, delete: if isSignedIn() && (request.auth.uid == existing().userId || existing().userId.matches('^custom_.*'));
     }
   }
 }
+

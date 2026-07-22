@@ -85,6 +85,24 @@
         "createdAt": { "type": "integer" }
       },
       "required": ["id", "fromId", "toId", "status", "createdAt"]
+    },
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "User owned vehicles with fuel rate and seat capacity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "makeModel": { "type": "string" },
+        "plate": { "type": "string" },
+        "fuelCostPerKm": { "type": "number" },
+        "seats": { "type": "integer" },
+        "color": { "type": "string" },
+        "fuelType": { "type": "string" },
+        "isDefault": { "type": "boolean" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "userId", "makeModel", "plate", "fuelCostPerKm", "seats", "color"]
     }
   },
   "firestore": {
@@ -107,6 +125,10 @@
     "/notifications/{notificationId}": {
       "schema": "Notification",
       "description": "User notifications for requests and payments"
+    },
+    "/vehicles/{vehicleId}": {
+      "schema": "Vehicle",
+      "description": "Vehicles registered by users"
     }
   }
 }

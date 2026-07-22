@@ -9,6 +9,7 @@ interface RouteBuilderProps {
   onChange: (stops: RouteStop[]) => void;
   onMetricsChange: (metrics: { distance: number; duration: number; cost: number }) => void;
   currencySymbol?: string;
+  fuelCostPerKm?: number;
 }
 
 const PRESET_PLACES = [
@@ -96,7 +97,7 @@ const getLocalSuggestions = (queryStr: string) => {
   return results.slice(0, 5);
 };
 
-export default function RouteBuilder({ stops, onChange, onMetricsChange, currencySymbol = 'zł' }: RouteBuilderProps) {
+export default function RouteBuilder({ stops, onChange, onMetricsChange, currencySymbol = 'zł', fuelCostPerKm = 3.5 }: RouteBuilderProps) {
   const [addressInput, setAddressInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isMapPopupOpen, setIsMapPopupOpen] = useState(false);
@@ -145,7 +146,7 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
     fetchRoadRoute(stops)
       .then((res) => {
         setRoadCoords(res.coordinates);
-        const cost = parseFloat((res.distanceKm * 2.5).toFixed(1));
+        const cost = parseFloat((res.distanceKm * fuelCostPerKm).toFixed(1));
         onMetricsChange({
           distance: res.distanceKm,
           duration: res.durationMins,
@@ -155,7 +156,7 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
       .finally(() => {
         setLoadingRoadRoute(false);
       });
-  }, [stops]);
+  }, [stops, fuelCostPerKm]);
 
   const addStop = (address: string, lat?: number, lng?: number) => {
     if (!address.trim()) return;

@@ -128,6 +128,23 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
 
           <p className="text-[10px] text-gray-400 font-semibold">{trip.driverName} • Taşıyıcı</p>
 
+          {trip.vehicleInfo && (
+            <div className="inline-flex items-center gap-1.5 bg-slate-100/80 border border-slate-200/60 px-2 py-0.5 rounded-md text-[10px] font-medium text-slate-700 mt-1">
+              <Car className="w-3 h-3 text-indigo-600 shrink-0" />
+              <span className="font-bold text-slate-900">{trip.vehicleInfo.makeModel}</span>
+              {trip.vehicleInfo.plate && (
+                <span className="font-mono bg-slate-800 text-white px-1 py-0.2 rounded text-[8px] font-bold">
+                  {trip.vehicleInfo.plate}
+                </span>
+              )}
+              {trip.vehicleInfo.fuelCostPerKm && (
+                <span className="text-[9px] text-emerald-700 font-semibold">
+                  ({trip.vehicleInfo.fuelCostPerKm} TL/km)
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-3 text-[10px] text-gray-500 font-medium pt-1.5 flex-wrap">
             <span className="flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5 text-gray-400" />

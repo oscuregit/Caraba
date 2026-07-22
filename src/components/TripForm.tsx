@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Trip, RouteStop, User } from '../types';
-import { createTrip, updateTrip } from '../services/db';
+import { Trip, RouteStop, User, Vehicle } from '../types';
+import { createTrip, updateTrip, subscribeToVehicles } from '../services/db';
 import RouteBuilder from './RouteBuilder';
-import { X, Calendar, Clock, Car, Tag, Sparkles, AlertCircle, Copy } from 'lucide-react';
+import { X, Calendar, Clock, Car, Tag, Sparkles, AlertCircle, Copy, Gauge, Users, Check } from 'lucide-react';
 
 interface TripFormProps {
   currentUser: User;
   onClose: () => void;
   editingTrip?: Trip; // If editing
   repeatingTrip?: Trip; // If duplicating/repeating
+  preselectedVehicleId?: string;
 }
 
-export default function TripForm({ currentUser, onClose, editingTrip, repeatingTrip }: TripFormProps) {
+export default function TripForm({ currentUser, onClose, editingTrip, repeatingTrip, preselectedVehicleId }: TripFormProps) {
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
+
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -26,6 +30,42 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Subscribe to user vehicles
+  useEffect(() => {
+    const unsub = subscribeToVehicles(currentUser.uid, (userVehicles) => {
+      setVehicles(userVehicles);
+      
+      // Auto-select vehicle if not editing or if preselected
+      if (!editingTrip) {
+        if (preselectedVehicleId) {
+          const match = userVehicles.find(v => v.id === preselectedVehicleId);
+          if (match) setSelectedVehicleId(match.id);
+        } else if (userVehicles.length > 0) {
+          const defaultV = userVehicles.find(v => v.isDefault) || userVehicles[0];
+          setSelectedVehicleId(defaultV.id);
+        }
+      }
+    });
+    return () => unsub();
+  }, [currentUser.uid, editingTrip, preselectedVehicleId]);
+
+  // Selected vehicle object
+  const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
+  const fuelRate = selectedVehicle ? selectedVehicle.fuelCostPerKm : 3.5;
+
+  // Whenever selected vehicle changes, recalculate cost & max passengers
+  useEffect(() => {
+    if (selectedVehicle) {
+      if (distanceKm > 0) {
+        setEstimatedCost(parseFloat((distanceKm * selectedVehicle.fuelCostPerKm).toFixed(1)));
+      }
+      if (!editingTrip) {
+        // Max passengers = total seats minus 1 (driver seat)
+        setMaxPassengers(Math.max(1, selectedVehicle.seats - 1));
+      }
+    }
+  }, [selectedVehicleId, distanceKm]);
+
   // Initialize form fields based on whether editing or repeating a trip
   useEffect(() => {
     if (editingTrip) {
@@ -39,10 +79,12 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
       setEstimatedCost(editingTrip.estimatedCost);
       setRecurring(editingTrip.recurring);
       setRecurringDays(editingTrip.recurringDays || [1, 2, 3, 4, 5]);
+      if (editingTrip.vehicleId) {
+        setSelectedVehicleId(editingTrip.vehicleId);
+      }
     } else if (repeatingTrip) {
       // Duplicating trip for repeat feature: preserve route/details, set today or tomorrow
       setTitle(repeatingTrip.title);
-      // Auto-set tomorrow's date
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split('T')[0];
@@ -55,8 +97,10 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
       setEstimatedCost(repeatingTrip.estimatedCost);
       setRecurring(repeatingTrip.recurring);
       setRecurringDays(repeatingTrip.recurringDays || [1, 2, 3, 4, 5]);
+      if (repeatingTrip.vehicleId) {
+        setSelectedVehicleId(repeatingTrip.vehicleId);
+      }
     } else {
-      // Default placeholder values for a quick neat creation
       setTitle('Sabah İşe Gidiş Rotalı');
       const todayStr = new Date().toISOString().split('T')[0];
       setDate(todayStr);
@@ -91,6 +135,15 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
       return;
     }
 
+    const vehicleInfo = selectedVehicle ? {
+      makeModel: selectedVehicle.makeModel,
+      plate: selectedVehicle.plate,
+      color: selectedVehicle.color,
+      seats: selectedVehicle.seats,
+      fuelCostPerKm: selectedVehicle.fuelCostPerKm,
+      fuelType: selectedVehicle.fuelType
+    } : undefined;
+
     setLoading(true);
     try {
       if (editingTrip) {
@@ -105,10 +158,12 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
           durationMin,
           estimatedCost,
           recurring,
-          recurringDays
+          recurringDays,
+          vehicleId: selectedVehicleId || undefined,
+          vehicleInfo
         });
       } else {
-        // Create new trip (or recreate duplicated)
+        // Create new trip
         await createTrip({
           driverId: currentUser.uid,
           driverName: currentUser.name,
@@ -124,7 +179,9 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
           passengers: [],
           requests: [],
           recurring,
-          recurringDays
+          recurringDays,
+          vehicleId: selectedVehicleId || undefined,
+          vehicleInfo
         });
       }
       onClose();
@@ -182,6 +239,60 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
             </div>
           )}
 
+          {/* Vehicle Selector Section */}
+          <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Car className="w-4 h-4 text-indigo-600" />
+                <span className="text-xs font-bold text-slate-800">Kullanılacak Araç</span>
+              </div>
+              {selectedVehicle && (
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                  {selectedVehicle.fuelCostPerKm} TL / km Yakıt Maliyeti
+                </span>
+              )}
+            </div>
+
+            {vehicles.length > 0 ? (
+              <div className="space-y-2">
+                <select
+                  value={selectedVehicleId}
+                  onChange={(e) => setSelectedVehicleId(e.target.value)}
+                  className="w-full text-xs font-semibold bg-white border border-indigo-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-xs"
+                >
+                  <option value="">Araç Seçilmedi (Standart Masraf)</option>
+                  {vehicles.map(v => (
+                    <option key={v.id} value={v.id}>
+                      🚗 {v.makeModel} ({v.plate}) - {v.fuelCostPerKm} TL/km
+                    </option>
+                  ))}
+                </select>
+
+                {selectedVehicle && (
+                  <div className="bg-white rounded-xl p-3 border border-indigo-100 flex items-center justify-between text-xs text-slate-700">
+                    <div>
+                      <p className="font-bold text-slate-900">{selectedVehicle.makeModel}</p>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        Plaka: <span className="font-mono font-bold text-slate-800">{selectedVehicle.plate}</span> • Renk: {selectedVehicle.color}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Boş Koltuk</p>
+                      <p className="font-black text-indigo-600">{selectedVehicle.seats - 1} Yolcu</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl p-3 border border-dashed border-indigo-200 text-xs text-slate-600 space-y-1">
+                <p className="font-bold text-slate-800">Henüz garajınızda kayıtlı araç bulunmuyor.</p>
+                <p className="text-[10px] text-slate-500">
+                  Nav menüdeki <b>"Araçlarım"</b> sekmesinden aracınızı ekleyerek km başı yakıt ücretinizi belirleyebilirsiniz.
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Title Field */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block pl-1">Yolculuk Başlığı</label>
@@ -232,6 +343,7 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
               stops={stops}
               onChange={setStops}
               onMetricsChange={handleMetricsChange}
+              fuelCostPerKm={fuelRate}
             />
           </div>
 
@@ -247,8 +359,10 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
                 <p className="text-sm font-black text-gray-800 mt-1">{durationMin} dk</p>
               </div>
               <div>
-                <p className="text-[10px] text-emerald-600 font-bold uppercase">Tahmini Masraf</p>
-                <p className="text-sm font-black text-emerald-700 mt-1">{estimatedCost} zł</p>
+                <p className="text-[10px] text-emerald-600 font-bold uppercase">
+                  {selectedVehicle ? 'Araç Yakıt Masrafı' : 'Tahmini Masraf'}
+                </p>
+                <p className="text-sm font-black text-emerald-700 mt-1">{estimatedCost} TL</p>
               </div>
             </div>
           )}
@@ -332,3 +446,4 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
     </div>
   );
 }
+

@@ -33,6 +33,19 @@ export interface LiveLocation {
   active: boolean;
 }
 
+export interface Vehicle {
+  id: string;
+  userId: string;
+  makeModel: string;
+  plate: string;
+  fuelCostPerKm: number;
+  seats: number;
+  color: string;
+  fuelType?: string;
+  isDefault?: boolean;
+  createdAt?: number;
+}
+
 export interface Trip {
   id: string;
   driverId: string;
@@ -42,7 +55,7 @@ export interface Trip {
   time: string;
   stops: RouteStop[];
   maxPassengers: number;
-  estimatedCost: number; // in TL (or zł as in the prompt example!)
+  estimatedCost: number; // in TL or zł
   distanceKm: number;
   durationMin: number;
   status: 'scheduled' | 'active' | 'completed' | 'cancelled';
@@ -51,6 +64,15 @@ export interface Trip {
   recurring: boolean;
   recurringDays?: number[]; // [1, 2, 3, 4, 5] (Monday-Friday)
   liveLocations?: Record<string, LiveLocation>;
+  vehicleId?: string;
+  vehicleInfo?: {
+    makeModel: string;
+    plate?: string;
+    color?: string;
+    seats?: number;
+    fuelCostPerKm?: number;
+    fuelType?: string;
+  };
 }
 
 export interface FinanceTransaction {
