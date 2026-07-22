@@ -720,8 +720,12 @@ export async function updateLiveLocation(tripId: string, userId: string, locatio
   const path = `trips/${tripId}`;
   try {
     const tripRef = doc(db, 'trips', tripId);
+    const safeLat = typeof location.lat === 'number' && !isNaN(location.lat) ? location.lat : 41.0082;
+    const safeLng = typeof location.lng === 'number' && !isNaN(location.lng) ? location.lng : 28.9784;
     const fullLoc: LiveLocation = {
       ...location,
+      lat: safeLat,
+      lng: safeLng,
       userId,
       updatedAt: Date.now()
     };

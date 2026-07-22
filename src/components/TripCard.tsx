@@ -35,6 +35,7 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
   const [expanded, setExpanded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [openDriveMode, setOpenDriveMode] = useState(false);
 
   const isDriver = trip.driverId === currentUser.uid;
   const isPassenger = trip.passengers?.includes(currentUser.uid);
@@ -60,7 +61,11 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
   };
 
   const handleStartTrip = async () => {
-    await updateTrip(trip.id, { status: 'active' });
+    if (trip.status === 'scheduled') {
+      await updateTrip(trip.id, { status: 'active' });
+    }
+    setExpanded(true);
+    setOpenDriveMode(true);
   };
 
   const handleCompleteTrip = async () => {
@@ -354,22 +359,32 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
                   </button>
                   <button
                     onClick={handleStartTrip}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-sm transition-all cursor-pointer shadow-indigo-100"
                     id={`start-trip-btn-${trip.id}`}
                   >
-                    <Play className="w-3.5 h-3.5" /> Yolculuğu Başlat
+                    <Play className="w-3.5 h-3.5 fill-white" /> Yolculuğa Başla
                   </button>
                 </>
               )}
 
               {trip.status === 'active' && (
-                <button
-                  onClick={handleCompleteTrip}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-sm transition-all cursor-pointer animate-pulse"
-                  id={`complete-trip-btn-${trip.id}`}
-                >
-                  <CheckCircle className="w-3.5 h-3.5" /> Yolculuğu Tamamla
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleStartTrip}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-sm transition-all cursor-pointer shadow-indigo-100 animate-pulse"
+                    id={`start-drive-btn-${trip.id}`}
+                  >
+                    <Play className="w-3.5 h-3.5 fill-white" /> Yolculuğa Başla
+                  </button>
+                  <button
+                    onClick={handleCompleteTrip}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-3 py-2 rounded-xl flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                    id={`complete-trip-btn-${trip.id}`}
+                    title="Yolculuğu Tamamla"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" /> Tamamla
+                  </button>
+                </div>
               )}
 
               {trip.status === 'completed' && (
@@ -542,7 +557,12 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
 
           {/* Live location share directly inside card details */}
           {(trip.status === 'active' || trip.status === 'scheduled') && (isDriver || isPassenger) && (
-            <LocationShare trip={trip} currentUser={currentUser} />
+            <LocationShare 
+              trip={trip} 
+              currentUser={currentUser} 
+              autoOpenDriveMode={openDriveMode} 
+              onCloseDriveMode={() => setOpenDriveMode(false)} 
+            />
           )}
 
         </div>
