@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Trip, LiveLocation, User } from '../types';
 import { updateLiveLocation, completeTrip } from '../services/db';
-import { Navigation, MapPin, Check, Compass, Play, Pause, RefreshCw, Crosshair, Maximize2, Minimize2, X, ArrowRight, ShieldCheck, Gauge } from 'lucide-react';
+import { 
+  Navigation, MapPin, Check, Compass, Play, Pause, RefreshCw, Crosshair, 
+  Maximize2, Minimize2, X, ArrowRight, ShieldCheck, Gauge, LocateFixed, 
+  Locate, Eye, Route, Radio, Footprints 
+} from 'lucide-react';
 import L from 'leaflet';
-import { fetchRoadRoute, interpolateAlongRoad, getUserLocation } from '../services/routing';
+import { fetchRoadRoute, interpolateAlongRoad, getUserLocation, getHaversineDistance } from '../services/routing';
 
 interface LocationShareProps {
   trip: Trip;
@@ -19,6 +24,7 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
   const [isDriveModeOpen, setIsDriveModeOpen] = useState(autoOpenDriveMode);
   const [currentSpeed, setCurrentSpeed] = useState(48); // simulated live driving speed in km/h
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [autoCenterLock, setAutoCenterLock] = useState(true); // Auto-lock map center to user location
 
   const stops = trip.stops || [];
   const hasStops = stops.length >= 2;
@@ -36,6 +42,7 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
   useEffect(() => {
     if (autoOpenDriveMode) {
       setIsDriveModeOpen(true);
+      setAutoCenterLock(true);
     }
   }, [autoOpenDriveMode]);
 
@@ -105,12 +112,14 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
   
   const polylineRef = useRef<L.Polyline | null>(null);
   const fsPolylineRef = useRef<L.Polyline | null>(null);
+  const fsUserAccessPolylineRef = useRef<L.Polyline | null>(null);
   
   const stopsLayerRef = useRef<L.LayerGroup | null>(null);
   const fsStopsLayerRef = useRef<L.LayerGroup | null>(null);
   
   const liveLayerRef = useRef<L.LayerGroup | null>(null);
   const fsLiveLayerRef = useRef<L.LayerGroup | null>(null);
+  const fsUserMarkerRef = useRef<L.Marker | null>(null);
 
   // Custom marker styles using divIcon
   const createStopIcon = (type: 'start' | 'end' | 'stop', index: number, address: string) => {
@@ -145,6 +154,26 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
       className: 'custom-live-icon',
       iconSize: [36, 36],
       iconAnchor: [18, 18]
+    });
+  };
+
+  const createUserLocationIcon = (name: string, roleLabel: string) => {
+    const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    return L.divIcon({
+      html: `
+        <div class="relative flex items-center justify-center animate-fadeIn">
+          <span class="absolute inline-flex h-12 w-12 rounded-full bg-emerald-400 opacity-60 animate-ping"></span>
+          <div class="relative flex items-center justify-center w-10 h-10 rounded-full border-2 border-white shadow-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black text-xs">
+            ${initials}
+          </div>
+          <div class="absolute -bottom-5 bg-slate-900/90 text-emerald-300 border border-emerald-500/50 text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-lg whitespace-nowrap">
+            Sen (${roleLabel})
+          </div>
+        </div>
+      `,
+      className: 'custom-user-live-icon',
+      iconSize: [40, 40],
+      iconAnchor: [20, 20]
     });
   };
 
@@ -274,6 +303,11 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
           maxZoom: 19
         }).addTo(map);
 
+        // Turn off auto center lock when user manually drags the map
+        map.on('dragstart', () => {
+          setAutoCenterLock(false);
+        });
+
         fsMapRef.current = map;
       }
 
@@ -294,6 +328,25 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
         }).addTo(fsMap);
       }
 
+      // Render user-specific connector access line from current location to trip start stop
+      const startStop = stops.length > 0 ? stops[0] : null;
+      if (userLocation && startStop) {
+        const accessCoords: [number, number][] = [
+          [userLocation.lat, userLocation.lng],
+          [startStop.lat, startStop.lng]
+        ];
+        if (fsUserAccessPolylineRef.current) {
+          fsUserAccessPolylineRef.current.setLatLngs(accessCoords);
+        } else {
+          fsUserAccessPolylineRef.current = L.polyline(accessCoords, {
+            color: '#10b981', // emerald dashed connector
+            weight: 4,
+            dashArray: '8, 8',
+            opacity: 0.9
+          }).addTo(fsMap);
+        }
+      }
+
       // Render stops
       if (!fsStopsLayerRef.current) {
         fsStopsLayerRef.current = L.layerGroup().addTo(fsMap);
@@ -312,15 +365,25 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
       fsLiveLayerRef.current.clearLayers();
 
       Object.entries(liveLocations).forEach(([uid, loc]) => {
-        if (!loc.active) return;
+        if (!loc.active || uid === currentUser.uid) return;
         const icon = createLiveLocationIcon(loc.role, loc.userName);
         const marker = L.marker([loc.lat, loc.lng], { icon });
         fsLiveLayerRef.current?.addLayer(marker);
       });
 
+      // Render current user's live position
       if (userLocation) {
-        fsMap.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
-      } else if (fsPolylineRef.current) {
+        const userIcon = createUserLocationIcon(currentUser.name, isDriver ? 'Sürücü' : 'Yolcu');
+        if (fsUserMarkerRef.current) {
+          fsUserMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
+        } else {
+          fsUserMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon }).addTo(fsMap);
+        }
+
+        if (autoCenterLock) {
+          fsMap.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
+        }
+      } else if (!autoCenterLock && fsPolylineRef.current) {
         try {
           fsMap.fitBounds(fsPolylineRef.current.getBounds(), { padding: [50, 50] });
         } catch (e) {
@@ -335,17 +398,43 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
         fsMapRef.current.remove();
         fsMapRef.current = null;
         fsPolylineRef.current = null;
+        fsUserAccessPolylineRef.current = null;
         fsStopsLayerRef.current = null;
         fsLiveLayerRef.current = null;
+        fsUserMarkerRef.current = null;
       }
     };
-  }, [isDriveModeOpen, stops, roadCoords, liveLocations, userLocation]);
+  }, [isDriveModeOpen, stops, roadCoords, liveLocations, userLocation, autoCenterLock]);
 
-  const recenterGPS = () => {
-    if (userLocation && fsMapRef.current) {
-      fsMapRef.current.setView([userLocation.lat, userLocation.lng], 17, { animate: true });
+  const recenterOnUser = async () => {
+    setAutoCenterLock(true);
+    let loc = userLocation;
+    if (!loc) {
+      const res = await getUserLocation();
+      if (res.isRealLocation || res.lat) {
+        loc = { lat: res.lat, lng: res.lng };
+        setUserLocation(loc);
+      }
+    }
+    if (loc && fsMapRef.current) {
+      fsMapRef.current.setView([loc.lat, loc.lng], 17, { animate: true });
     } else if (hasStops && fsMapRef.current) {
       fsMapRef.current.setView([stops[0].lat, stops[0].lng], 16, { animate: true });
+    }
+  };
+
+  const recenterWholeRoute = () => {
+    setAutoCenterLock(false);
+    if (fsMapRef.current) {
+      if (fsPolylineRef.current) {
+        try {
+          fsMapRef.current.fitBounds(fsPolylineRef.current.getBounds(), { padding: [50, 50] });
+        } catch (e) {
+          console.error(e);
+        }
+      } else if (hasStops) {
+        fsMapRef.current.setView([stops[0].lat, stops[0].lng], 13, { animate: true });
+      }
     }
   };
 
@@ -363,6 +452,12 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
   };
 
   const destinationStop = stops.length > 0 ? stops[stops.length - 1] : null;
+  const startStop = stops.length > 0 ? stops[0] : null;
+  
+  const distToStartKm = userLocation && startStop 
+    ? getHaversineDistance(userLocation.lat, userLocation.lng, startStop.lat, startStop.lng)
+    : null;
+  const etaToStartMin = distToStartKm !== null ? Math.max(1, Math.round((distToStartKm / 35) * 60)) : null;
 
   return (
     <>
@@ -392,7 +487,7 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
           </button>
         </div>
 
-        {/* Embedded Map Container (No slider under map!) */}
+        {/* Embedded Map Container */}
         <div className="relative bg-slate-100 border border-slate-200 rounded-2xl overflow-hidden h-[210px] shadow-inner" id="map-parent">
           <div id={mapContainerId} className="w-full h-full z-10" />
           
@@ -444,19 +539,19 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
         </div>
       </div>
 
-      {/* Fullscreen Google Maps Style Live Driving Navigation Overlay */}
-      {isDriveModeOpen && (
-        <div className="fixed inset-0 z-[3000] bg-slate-900 flex flex-col animate-fadeIn" id="fullscreen-drive-overlay">
+      {/* Fullscreen Google Maps Style Live Driving Navigation Overlay (Rendered via React Portal at document.body) */}
+      {isDriveModeOpen && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-slate-900 flex flex-col animate-fadeIn w-screen h-screen top-0 left-0 right-0 bottom-0 overflow-hidden" id="fullscreen-drive-overlay">
           
           {/* Top Navigation HUD - Google Maps Emerald Green Bar */}
-          <div className="bg-emerald-700 text-white p-3.5 sm:p-4 shadow-xl z-30 flex items-center justify-between gap-3 border-b border-emerald-600">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="bg-emerald-700 text-white p-3 sm:p-4 shadow-2xl z-30 flex items-center justify-between gap-2 border-b border-emerald-600 shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <div className="w-10 h-10 rounded-2xl bg-white text-emerald-700 flex items-center justify-center shrink-0 shadow-md">
                 <Navigation className="w-6 h-6 transform rotate-45" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black uppercase tracking-widest bg-emerald-900/60 text-emerald-200 px-2 py-0.5 rounded-full">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[9px] font-black uppercase tracking-widest bg-emerald-950/60 text-emerald-200 px-2 py-0.5 rounded-full">
                     SÜRÜŞ MODU
                   </span>
                   <span className="text-[10px] text-emerald-100 font-bold flex items-center gap-1">
@@ -464,60 +559,129 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
                     Canlı GPS
                   </span>
                 </div>
-                <h3 className="text-xs sm:text-sm font-bold truncate mt-0.5">
+                <h3 className="text-xs sm:text-sm font-bold truncate mt-0.5 text-white">
                   Hedef: {destinationStop ? destinationStop.address : 'Güzergah Tamamlanıyor'}
                 </h3>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={closeDriveMode}
-              className="p-2 hover:bg-emerald-800 rounded-2xl text-emerald-100 hover:text-white transition-colors cursor-pointer shrink-0"
-              title="Tam Ekrandan Çık"
-              id="close-fullscreen-drive-btn"
-            >
-              <X className="w-6 h-6" />
-            </button>
+            {/* Quick Action Controls on Header */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={recenterOnUser}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md ${
+                  autoCenterLock
+                    ? 'bg-emerald-300 text-slate-950 ring-2 ring-emerald-100 font-black'
+                    : 'bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 border border-emerald-500/40'
+                }`}
+                id="recenter-user-btn"
+                title="Konumumu Ekranın Ortasında Göster"
+              >
+                <LocateFixed className={`w-4 h-4 ${autoCenterLock ? 'animate-spin-slow text-slate-950' : ''}`} />
+                <span className="hidden sm:inline">Beni</span> Ortala
+                {autoCenterLock && <span className="w-2 h-2 bg-slate-950 rounded-full animate-ping"></span>}
+              </button>
+
+              <button
+                type="button"
+                onClick={recenterWholeRoute}
+                className="px-2.5 py-1.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 border border-emerald-500/40 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                id="recenter-route-btn"
+                title="Tüm Sefer Güzergahını Göster"
+              >
+                <Eye className="w-4 h-4" />
+                <span className="hidden sm:inline">Tüm Güzergah</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={closeDriveMode}
+                className="p-2 hover:bg-emerald-800 rounded-2xl text-emerald-100 hover:text-white transition-colors cursor-pointer shrink-0"
+                title="Tam Ekrandan Çık"
+                id="close-fullscreen-drive-btn"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
           </div>
 
           {/* Fullscreen Map Area */}
-          <div className="relative flex-1 w-full h-full bg-slate-800">
+          <div className="relative flex-1 w-full h-full bg-slate-800 overflow-hidden">
             <div id={fullscreenMapId} className="w-full h-full z-10" />
 
-            {/* Recenter GPS Floating Button */}
-            <button
-              type="button"
-              onClick={recenterGPS}
-              className="absolute top-4 right-4 bg-white text-slate-800 p-3 rounded-2xl shadow-2xl border border-slate-200 z-20 hover:bg-slate-50 transition-all cursor-pointer flex items-center justify-center"
-              title="Konumumu Haritada Merkezle"
-            >
-              <Crosshair className="w-6 h-6 text-indigo-600 animate-pulse" />
-            </button>
+            {/* Floating Action Center Button on Map */}
+            <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 items-end">
+              <button
+                type="button"
+                onClick={recenterOnUser}
+                className={`p-3 rounded-2xl shadow-2xl border transition-all cursor-pointer flex items-center gap-2 font-bold text-xs ${
+                  autoCenterLock
+                    ? 'bg-indigo-600 text-white border-indigo-400 ring-4 ring-indigo-200/50 shadow-indigo-500/30'
+                    : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50'
+                }`}
+                title="Beni Haritada Ortala"
+                id="floating-recenter-user-btn"
+              >
+                <LocateFixed className={`w-5 h-5 ${autoCenterLock ? 'text-white' : 'text-indigo-600'}`} />
+                <span>Beni Ortala</span>
+              </button>
 
-            {/* Turn by turn notification card floating on map */}
-            <div className="absolute top-4 left-4 z-20 bg-slate-900/85 backdrop-blur-md text-white p-3 rounded-2xl border border-slate-700 shadow-xl max-w-[220px]">
-              <div className="flex items-center gap-2">
-                <ArrowRight className="w-4 h-4 text-emerald-400" />
-                <span className="text-[10px] font-bold text-slate-300">Güzergah İzleniyor</span>
+              <button
+                type="button"
+                onClick={recenterWholeRoute}
+                className="bg-white/95 backdrop-blur-md text-slate-700 p-2.5 rounded-2xl shadow-xl border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1.5 font-semibold text-[11px]"
+                id="floating-recenter-route-btn"
+              >
+                <Eye className="w-4 h-4 text-slate-500" />
+                <span>Tüm Harita</span>
+              </button>
+            </div>
+
+            {/* Realtime User Access Route & Telemetry Card */}
+            <div className="absolute top-4 left-4 z-20 bg-slate-900/90 backdrop-blur-md text-white p-3.5 rounded-2xl border border-slate-700 shadow-2xl max-w-[270px] space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                  <Route className="w-3.5 h-3.5" />
+                  KİŞİSEL GÜZERGAH TAKİBİ
+                </span>
+                <span className="text-[9px] text-slate-400 font-bold">Canlı GPS</span>
               </div>
-              <p className="text-[11px] font-bold text-white mt-1 truncate">
-                {trip.distanceKm} km • {trip.durationMin} dakika
-              </p>
+
+              {distToStartKm !== null ? (
+                <div className="space-y-1 text-[11px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">Kalkış Noktasına:</span>
+                    <span className="font-bold text-emerald-300">{distToStartKm} km (~{etaToStartMin} dk)</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">Sefer Mesafesi:</span>
+                    <span className="font-bold text-indigo-300">{trip.distanceKm} km</span>
+                  </div>
+                  <div className="text-[9px] text-emerald-300 flex items-center gap-1.5 mt-1 bg-emerald-950/80 p-2 rounded-xl border border-emerald-800/60 leading-tight">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+                    <span>Konumunuzdan kalkış noktasına özel yeşil güzergah çizgisi oluşturuldu.</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[10px] text-slate-300 italic">
+                  GPS konumunuz alınıyor... Sefer noktasına canlı bağlantı kuruluyor.
+                </p>
+              )}
             </div>
           </div>
 
           {/* Bottom Drive Telemetry HUD - Google Maps Dashboard */}
-          <div className="bg-slate-900 border-t border-slate-800 p-4 z-30 shadow-2xl">
-            <div className="max-w-md mx-auto flex items-center justify-between gap-4">
+          <div className="bg-slate-900 border-t border-slate-800 p-4 z-30 shadow-2xl shrink-0">
+            <div className="max-w-xl mx-auto flex items-center justify-between gap-4">
               
               {/* Speedometer */}
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex flex-col items-center justify-center font-black shadow-lg">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex flex-col items-center justify-center font-black shadow-lg shrink-0">
                   <span className="text-sm leading-none">{currentSpeed}</span>
                   <span className="text-[7px] tracking-wider uppercase opacity-80 mt-0.5">KM/S</span>
                 </div>
-                <div>
+                <div className="hidden sm:block min-w-0">
                   <p className="text-xs font-bold text-white">Sürüş Hızı</p>
                   <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
                     <ShieldCheck className="w-3 h-3" /> Canlı Yol Takibi
@@ -525,16 +689,16 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
                 </div>
               </div>
 
-              {/* Trip stats summary */}
-              <div className="text-right">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Kalan Tahmini</span>
-                <p className="text-xs font-black text-indigo-400">
-                  {trip.distanceKm} KM • {trip.durationMin} DK
+              {/* Status pill */}
+              <div className="text-center flex-1">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block">Kamera Kilit Durumu</span>
+                <p className={`text-[11px] font-bold mt-0.5 ${autoCenterLock ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {autoCenterLock ? 'Ortalanmış Takip Açık' : 'Serbest Görünüm (Ortala\'ya basarak kilitleyin)'}
                 </p>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {isDriver && (
                   <button
                     type="button"
@@ -560,9 +724,11 @@ export default function LocationShare({ trip, currentUser, autoOpenDriveMode = f
             </div>
           </div>
 
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
 }
+
 
