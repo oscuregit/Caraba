@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RouteStop } from '../types';
-import { MapPin, Plus, Trash2, ArrowUpDown, Info, Check, Map, Compass, Loader2, X } from 'lucide-react';
+import { MapPin, Plus, Trash2, ArrowUpDown, Info, Check, Map, Compass, Loader2, X, Navigation, Crosshair } from 'lucide-react';
 import L from 'leaflet';
+import { getUserLocation, fetchRoadRoute, GeolocationResult, DEFAULT_FALLBACK_LOCATION } from '../services/routing';
 
 interface RouteBuilderProps {
   stops: RouteStop[];
@@ -104,56 +105,57 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
   const [osmSuggestions, setOsmSuggestions] = useState<{ address: string; lat: number; lng: number }[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
+  // Live User Geolocation state
+  const [userLocation, setUserLocation] = useState<GeolocationResult>({ ...DEFAULT_FALLBACK_LOCATION, isRealLocation: false });
+  const [fetchingLocation, setFetchingLocation] = useState(false);
+
   // Mini-map references and states
   const miniMapRef = useRef<L.Map | null>(null);
   const stopsLayerRef = useRef<L.LayerGroup | null>(null);
+  const polylineLayerRef = useRef<L.Polyline | null>(null);
   const previewMarkerRef = useRef<L.Marker | null>(null);
   const [previewCoords, setPreviewCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [roadCoords, setRoadCoords] = useState<[number, number][]>([]);
+  const [loadingRoadRoute, setLoadingRoadRoute] = useState(false);
 
   // Picker Map references and states
   const pickerMapRef = useRef<L.Map | null>(null);
-  const [pickerCenter, setPickerCenter] = useState<{ lat: number; lng: number }>({ lat: 41.0082, lng: 28.9784 });
+  const [pickerCenter, setPickerCenter] = useState<{ lat: number; lng: number }>(DEFAULT_FALLBACK_LOCATION);
   const [resolvedAddress, setResolvedAddress] = useState('');
   const [resolvingAddress, setResolvingAddress] = useState(false);
 
-  // Simple heuristic distance calculation between coordinates in km
-  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // Radius of the earth in km
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return parseFloat((R * c).toFixed(1));
-  };
+  // Fetch live user location on component mount
+  useEffect(() => {
+    setFetchingLocation(true);
+    getUserLocation().then((loc) => {
+      setUserLocation(loc);
+      setFetchingLocation(false);
+    });
+  }, []);
 
-  const recalculateMetrics = (currentStops: RouteStop[]) => {
-    if (currentStops.length < 2) {
+  // Recalculate turn-by-turn road route via OSRM when stops change
+  useEffect(() => {
+    if (stops.length < 2) {
+      setRoadCoords([]);
       onMetricsChange({ distance: 0, duration: 0, cost: 0 });
       return;
     }
 
-    let totalDist = 0;
-    for (let i = 0; i < currentStops.length - 1; i++) {
-      const from = currentStops[i];
-      const to = currentStops[i + 1];
-      totalDist += getDistance(from.lat, from.lng, to.lat, to.lng);
-    }
-
-    // Multiply by 1.2 to account for real road curves
-    totalDist = parseFloat((totalDist * 1.2).toFixed(1));
-    if (totalDist === 0) totalDist = 4.5; // default fallback
-
-    // Estimate duration: 2.2 minutes per km + 3 mins buffer per extra stop
-    const duration = Math.round(totalDist * 2.2 + (currentStops.length - 2) * 3);
-    
-    // Estimate cost: 2.5 currency units per km (representing fuel, wear, and toll cost)
-    const cost = parseFloat((totalDist * 2.5).toFixed(1));
-
-    onMetricsChange({ distance: totalDist, duration, cost });
-  };
+    setLoadingRoadRoute(true);
+    fetchRoadRoute(stops)
+      .then((res) => {
+        setRoadCoords(res.coordinates);
+        const cost = parseFloat((res.distanceKm * 2.5).toFixed(1));
+        onMetricsChange({
+          distance: res.distanceKm,
+          duration: res.durationMins,
+          cost
+        });
+      })
+      .finally(() => {
+        setLoadingRoadRoute(false);
+      });
+  }, [stops]);
 
   const addStop = (address: string, lat?: number, lng?: number) => {
     if (!address.trim()) return;
@@ -189,7 +191,6 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
     }
 
     onChange(updatedStops);
-    recalculateMetrics(updatedStops);
     setAddressInput('');
     setPreviewCoords(null);
     setShowSuggestions(false);
@@ -209,7 +210,6 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
     }
 
     onChange(updatedStops);
-    recalculateMetrics(updatedStops);
   };
 
   const moveStop = (index: number, direction: 'up' | 'down') => {
@@ -232,7 +232,6 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
     }
 
     onChange(updatedStops);
-    recalculateMetrics(updatedStops);
   };
 
   // Debounced real-time OSM Geocoding suggestion search
@@ -321,7 +320,7 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
     };
   }, []);
 
-  // Sync stops & preview marker on the mini map
+  // Sync stops, preview marker, & turn-by-turn road polyline on the mini map
   useEffect(() => {
     const map = miniMapRef.current;
     if (!map) return;
@@ -335,7 +334,24 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
       previewMarkerRef.current = null;
     }
 
+    if (polylineLayerRef.current) {
+      polylineLayerRef.current.remove();
+      polylineLayerRef.current = null;
+    }
+
     const bounds: L.LatLngTuple[] = [];
+
+    // Draw real turn-by-turn road polyline if roadCoords exist
+    if (roadCoords && roadCoords.length > 0) {
+      roadCoords.forEach((pt) => bounds.push(pt));
+      polylineLayerRef.current = L.polyline(roadCoords, {
+        color: '#4f46e5',
+        weight: 4,
+        opacity: 0.9,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+    }
 
     // Render active route stops
     stops.forEach((stop, index) => {
@@ -371,17 +387,17 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
         .openPopup();
     }
 
-    // Auto zoom and fit to wrap stops and preview comfortably
+    // Auto zoom and fit to wrap stops, road polyline, and preview comfortably
     if (bounds.length > 0) {
       try {
-        map.fitBounds(bounds, { padding: [25, 25], maxZoom: 14 });
+        map.fitBounds(bounds, { padding: [25, 25], maxZoom: 15 });
       } catch (err) {
         console.error("Mini map fit bounds error", err);
       }
     } else {
-      map.setView([41.0082, 28.9784], 11);
+      map.setView([userLocation.lat, userLocation.lng], 12);
     }
-  }, [stops, previewCoords]);
+  }, [stops, previewCoords, roadCoords, userLocation]);
 
   // Picker Map reverse geocode execution
   const reverseGeocode = (lat: number, lng: number) => {
@@ -408,6 +424,45 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
       });
   };
 
+  // Jump picker map to user's real live location
+  const jumpToCurrentLocationInPicker = async () => {
+    setFetchingLocation(true);
+    const loc = await getUserLocation();
+    setUserLocation(loc);
+    setPickerCenter({ lat: loc.lat, lng: loc.lng });
+    if (pickerMapRef.current) {
+      pickerMapRef.current.setView([loc.lat, loc.lng], 16, { animate: true });
+    }
+    reverseGeocode(loc.lat, loc.lng);
+    setFetchingLocation(false);
+  };
+
+  // Add user's current live location directly as a stop
+  const addCurrentLocationAsStop = async () => {
+    setFetchingLocation(true);
+    const loc = await getUserLocation();
+    setUserLocation(loc);
+    setResolvingAddress(true);
+
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${loc.lat}&lon=${loc.lng}&zoom=18&addressdetails=1`, {
+      headers: { 'Accept-Language': 'tr,en' }
+    })
+      .then(res => res.json())
+      .then(data => {
+        const fullAddr = data?.display_name || getLocalReverseGeocode(loc.lat, loc.lng);
+        const shortAddr = fullAddr.split(',').slice(0, 2).join(', ');
+        addStop(`📍 Canlı Konumum (${shortAddr})`, loc.lat, loc.lng);
+      })
+      .catch(() => {
+        const fullAddr = getLocalReverseGeocode(loc.lat, loc.lng);
+        addStop(`📍 Canlı Konumum (${fullAddr.split(',')[0]})`, loc.lat, loc.lng);
+      })
+      .finally(() => {
+        setResolvingAddress(false);
+        setFetchingLocation(false);
+      });
+  };
+
   // Picker Map initialization & lifecycle
   useEffect(() => {
     if (!isMapPopupOpen) {
@@ -418,16 +473,24 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
       return;
     }
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       const container = document.getElementById('popup-picker-map');
       if (!container) return;
 
-      const defaultCenter = stops.length > 0 ? [stops[stops.length - 1].lat, stops[stops.length - 1].lng] : [41.0082, 28.9784];
+      // Determine initial center: if stops exist, center on last stop; otherwise, fetch live user location!
+      let defaultCenter: [number, number] = [userLocation.lat, userLocation.lng];
+      if (stops.length > 0) {
+        defaultCenter = [stops[stops.length - 1].lat, stops[stops.length - 1].lng];
+      } else {
+        const liveLoc = await getUserLocation();
+        setUserLocation(liveLoc);
+        defaultCenter = [liveLoc.lat, liveLoc.lng];
+      }
 
       if (!pickerMapRef.current) {
         const map = L.map('popup-picker-map', {
           center: defaultCenter as L.LatLngExpression,
-          zoom: 14,
+          zoom: 15,
           zoomControl: true,
           attributionControl: false
         });
@@ -548,6 +611,25 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
 
       {/* Add Stop Input with Autocomplete Suggestion Dropdown */}
       <div className="relative space-y-3">
+        {/* Quick action: Use live location */}
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-gray-500">Durak Adresi Ekle</span>
+          <button
+            type="button"
+            id="use-live-location-btn"
+            onClick={addCurrentLocationAsStop}
+            disabled={fetchingLocation}
+            className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+          >
+            {fetchingLocation ? (
+              <Loader2 className="w-3 h-3 animate-spin text-emerald-600" />
+            ) : (
+              <Crosshair className="w-3 h-3 text-emerald-600" />
+            )}
+            📍 Canlı Konumumu Ekle
+          </button>
+        </div>
+
         <div className="flex gap-2">
           <div className="relative flex-1">
             <input
@@ -594,8 +676,13 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
         {/* Real-time Map preview directly below the input field showing entered stops & typed preview location */}
         <div className="relative bg-slate-100 border border-slate-200 rounded-2xl overflow-hidden h-[130px] shadow-inner" id="route-builder-mini-map-container">
           <div id="route-builder-mini-map" className="w-full h-full z-10" />
-          <div className="absolute top-2 left-2 bg-slate-900/75 backdrop-blur-sm px-2 py-0.5 rounded-full text-white text-[8px] font-bold tracking-wider uppercase z-20 pointer-events-none">
-            Aktif Güzergah Önizleme
+          <div className="absolute top-2 left-2 bg-slate-900/75 backdrop-blur-sm px-2 py-0.5 rounded-full text-white text-[8px] font-bold tracking-wider uppercase z-20 pointer-events-none flex items-center gap-1">
+            {loadingRoadRoute ? (
+              <Loader2 className="w-2.5 h-2.5 animate-spin text-indigo-400" />
+            ) : (
+              <Navigation className="w-2.5 h-2.5 text-emerald-400" />
+            )}
+            Gerçek Yol Güzergahı Önizleme
           </div>
         </div>
 
@@ -670,8 +757,8 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
       <div className="flex gap-2.5 bg-blue-50/50 border border-blue-100 p-3 rounded-xl text-blue-800">
         <Info className="w-4 h-4 shrink-0 mt-0.5" />
         <div className="text-[10px] leading-relaxed">
-          <span className="font-semibold block text-[11px]">Akıllı Güzergah & Gerçek Zamanlı Harita</span>
-          Adres yazarken mini harita üzerinden anlık konumunu görebilir, harita ikonuna tıklayarak doğrudan haritayı sürükleyip istediğiniz yeri işaretleyerek durak belirleyebilirsiniz. Rotalar arasındaki gerçek yol mesafesi anında hesaplanıp yakıt masrafına bölünür.
+          <span className="font-semibold block text-[11px]">Canlı Konum & Gerçek Yol Güzergahı (Google Maps Tipi)</span>
+          Durak eklerken cihazınızın canlı GPS konumunu otomatik algılar. Google Maps benzeri gerçek karayolu rotası (OSRM virajlı yol çizgisi) çizilir ve gerçek yol mesafesi anında hesaplanır.
         </div>
       </div>
 
@@ -689,14 +776,27 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
                 <Map className="w-5 h-5 text-indigo-600" />
                 <h4 className="font-bold text-gray-800 text-sm">Haritadan Durak Seç</h4>
               </div>
-              <button
-                type="button"
-                id="close-map-picker-btn"
-                onClick={() => setIsMapPopupOpen(false)}
-                className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  id="picker-jump-live-location-btn"
+                  onClick={jumpToCurrentLocationInPicker}
+                  className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-[11px] font-bold px-2.5 py-1 rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                  title="Haritayı Canlı Konumuma Getir"
+                >
+                  <Crosshair className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                  Canlı Konumuma Git
+                </button>
+                <button
+                  type="button"
+                  id="close-map-picker-btn"
+                  onClick={() => setIsMapPopupOpen(false)}
+                  className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Map Area */}
@@ -713,6 +813,16 @@ export default function RouteBuilder({ stops, onChange, onMetricsChange, currenc
                 </div>
                 <div className="w-2 h-2 bg-slate-900/30 rounded-full blur-[1px] mt-0.5"></div>
               </div>
+
+              {/* Floating button on map to jump to live GPS location */}
+              <button
+                type="button"
+                onClick={jumpToCurrentLocationInPicker}
+                className="absolute bottom-3 right-3 bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-700 p-2.5 rounded-full shadow-lg border border-slate-200 z-[1000] transition-all flex items-center justify-center cursor-pointer"
+                title="Canlı Konumuma Odaklan"
+              >
+                <Crosshair className="w-5 h-5 text-emerald-600" />
+              </button>
             </div>
 
             {/* Resolved Address bar */}

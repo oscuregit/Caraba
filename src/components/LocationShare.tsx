@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Trip, LiveLocation, User } from '../types';
 import { updateLiveLocation } from '../services/db';
-import { Navigation, MapPin, Check, Compass, Play, Pause, RefreshCw } from 'lucide-react';
+import { Navigation, MapPin, Check, Compass, Play, Pause, RefreshCw, Crosshair } from 'lucide-react';
 import L from 'leaflet';
+import { fetchRoadRoute, interpolateAlongRoad, getUserLocation } from '../services/routing';
 
 interface LocationShareProps {
   trip: Trip;
@@ -13,6 +14,9 @@ export default function LocationShare({ trip, currentUser }: LocationShareProps)
   const [sharing, setSharing] = useState(false);
   const [progress, setProgress] = useState(0); // 0 to 100 representing position along the route
   const [simulationActive, setSimulationActive] = useState(false);
+  const [roadCoords, setRoadCoords] = useState<[number, number][]>([]);
+  const [loadingRoad, setLoadingRoad] = useState(false);
+  const [useDeviceGps, setUseDeviceGps] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const stops = trip.stops || [];
@@ -27,8 +31,28 @@ export default function LocationShare({ trip, currentUser }: LocationShareProps)
   const liveLocations = trip.liveLocations || {};
   const activeShares = Object.values(liveLocations).filter(loc => loc.active);
 
-  // Helper to interpolate coordinate along the list of stops
+  // Fetch real road route from OSRM
+  useEffect(() => {
+    if (!hasStops) {
+      setRoadCoords([]);
+      return;
+    }
+    setLoadingRoad(true);
+    fetchRoadRoute(stops)
+      .then(res => {
+        setRoadCoords(res.coordinates);
+      })
+      .finally(() => {
+        setLoadingRoad(false);
+      });
+  }, [trip.id, stops]);
+
+  // Interpolate position along real road path
   const getInterpolatedCoordinate = (percentage: number) => {
+    if (roadCoords.length > 0) {
+      const pt = interpolateAlongRoad(roadCoords, percentage);
+      return { lat: pt[0], lng: pt[1] };
+    }
     if (!hasStops) return { lat: 41.0082, lng: 28.9784 };
     
     const segmentCount = stops.length - 1;
@@ -201,30 +225,32 @@ export default function LocationShare({ trip, currentUser }: LocationShareProps)
     };
   }, [trip.id]);
 
-  // Sync Route Polyline
+  // Sync Route Polyline (Turn-by-turn road)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !hasStops) return;
 
-    const latLngs = stops.map(s => [s.lat, s.lng] as [number, number]);
+    const latLngs = roadCoords.length > 0 ? roadCoords : stops.map(s => [s.lat, s.lng] as [number, number]);
 
     if (polylineRef.current) {
       polylineRef.current.setLatLngs(latLngs);
     } else {
       polylineRef.current = L.polyline(latLngs, {
         color: '#4f46e5',
-        weight: 3.5,
-        opacity: 0.85
+        weight: 4,
+        opacity: 0.9,
+        lineCap: 'round',
+        lineJoin: 'round'
       }).addTo(map);
     }
 
     // Auto fit bounds to show entire route comfortably
     try {
-      map.fitBounds(polylineRef.current.getBounds(), { padding: [25, 25] });
+      map.fitBounds(polylineRef.current.getBounds(), { padding: [30, 30] });
     } catch (e) {
       console.error("fitBounds error", e);
     }
-  }, [stops, hasStops]);
+  }, [stops, hasStops, roadCoords]);
 
   // Sync Stops Markers
   useEffect(() => {
