@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FinanceTransaction, User } from '../types';
 import { markAsPaid } from '../services/db';
+import { useLanguage } from '../LanguageContext';
 import { 
   DollarSign, 
   ArrowUpRight, 
@@ -22,6 +23,7 @@ interface FinanceSummaryProps {
 }
 
 export default function FinanceSummary({ currentUser, transactions }: FinanceSummaryProps) {
+  const { currencySymbol } = useLanguage();
   const [activeTab, setActiveTab] = useState<'debts' | 'receivables' | 'report'>('debts');
 
   // Filter transactions
@@ -56,7 +58,7 @@ export default function FinanceSummary({ currentUser, transactions }: FinanceSum
 
   // Export report to pseudo-CSV / Print
   const handleExportCSV = () => {
-    const headers = ['Tarih', 'Yolculuk', 'Ödeyen', 'Alıcı', 'Tutar (zł)', 'Durum'];
+    const headers = ['Tarih', 'Yolculuk', 'Ödeyen', 'Alıcı', `Tutar (${currencySymbol})`, 'Durum'];
     const rows = transactions
       .filter(t => t.payerId === currentUser.uid || t.receiverId === currentUser.uid)
       .map(t => [
@@ -64,7 +66,7 @@ export default function FinanceSummary({ currentUser, transactions }: FinanceSum
         t.tripTitle,
         t.payerName,
         t.receiverName,
-        `${t.amount} zł`,
+        `${t.amount} ${currencySymbol}`,
         t.status === 'paid' ? 'Ödendi' : 'Bekliyor'
       ]);
 
@@ -95,7 +97,7 @@ export default function FinanceSummary({ currentUser, transactions }: FinanceSum
             <ArrowUpRight className="w-4.5 h-4.5 text-white/80" />
           </div>
           <div className="space-y-0.5">
-            <h3 className="text-xl font-display font-bold tracking-tight">{totalOwed.toFixed(2)} zł</h3>
+            <h3 className="text-xl font-display font-bold tracking-tight">{totalOwed.toFixed(2)} {currencySymbol}</h3>
             <p className="text-[9px] text-rose-100">Ödemem Gereken Toplam</p>
           </div>
         </div>
@@ -110,7 +112,7 @@ export default function FinanceSummary({ currentUser, transactions }: FinanceSum
             <ArrowDownLeft className="w-4.5 h-4.5 text-white/80" />
           </div>
           <div className="space-y-0.5">
-            <h3 className="text-xl font-display font-bold tracking-tight">{totalToReceive.toFixed(2)} zł</h3>
+            <h3 className="text-xl font-display font-bold tracking-tight">{totalToReceive.toFixed(2)} {currencySymbol}</h3>
             <p className="text-[9px] text-emerald-100">Alacağım Toplam Tutar</p>
           </div>
         </div>
@@ -197,7 +199,7 @@ export default function FinanceSummary({ currentUser, transactions }: FinanceSum
                   </div>
 
                   <div className="text-right flex items-center gap-3">
-                    <span className="text-xs font-black text-gray-800">{t.amount.toFixed(2)} zł</span>
+                    <span className="text-xs font-black text-gray-800">{t.amount.toFixed(2)} {currencySymbol}</span>
                     
                     {t.status === 'pending' && (
                       <button
@@ -267,7 +269,7 @@ export default function FinanceSummary({ currentUser, transactions }: FinanceSum
 
                   <div className="text-right flex items-center gap-3">
                     <div className="space-y-0.5">
-                      <p className="text-xs font-black text-gray-800">{t.amount.toFixed(2)} zł</p>
+                      <p className="text-xs font-black text-gray-800">{t.amount.toFixed(2)} {currencySymbol}</p>
                       {t.status === 'pending' && (
                         <span className="text-[8px] text-amber-600 block font-semibold animate-pulse">
                           Ödeme Bekleniyor
@@ -305,7 +307,7 @@ export default function FinanceSummary({ currentUser, transactions }: FinanceSum
                   <TrendingUp className="w-4 h-4 text-emerald-400" />
                   <span className="text-[9px] text-slate-400 font-semibold uppercase">Toplam Kazanç</span>
                 </div>
-                <h5 className="text-lg font-black text-white mt-1">{(totalTripsShared * 45).toFixed(0)} zł</h5>
+                <h5 className="text-lg font-black text-white mt-1">{(totalTripsShared * 45).toFixed(0)} {currencySymbol}</h5>
                 <span className="text-[8px] text-slate-500 block mt-0.5">Yol masrafı paylaşım karı</span>
               </div>
 

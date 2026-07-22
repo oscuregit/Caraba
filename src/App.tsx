@@ -49,6 +49,9 @@ export default function App() {
   const [language, setLanguage] = useState<string>(() => {
     return localStorage.getItem('language') || 'tr';
   });
+  const [currency, setCurrency] = useState<string>(() => {
+    return localStorage.getItem('currency') || 'TL';
+  });
 
   const handleThemeChange = (newTheme: 'light' | 'dark') => {
     setTheme(newTheme);
@@ -60,24 +63,39 @@ export default function App() {
     localStorage.setItem('language', newLang);
   };
 
+  const handleCurrencyChange = (newCurr: string) => {
+    setCurrency(newCurr);
+    localStorage.setItem('currency', newCurr);
+  };
+
   return (
-    <LanguageProvider currentLang={language} onLangChange={handleLanguageChange}>
+    <LanguageProvider 
+      currentLang={language} 
+      onLangChange={handleLanguageChange}
+      currentCurrency={currency}
+      onCurrencyChange={handleCurrencyChange}
+    >
       <MainAppContent 
         theme={theme} 
         onThemeChange={handleThemeChange} 
         language={language} 
         onLanguageChange={handleLanguageChange} 
+        currency={currency}
+        onCurrencyChange={handleCurrencyChange}
       />
     </LanguageProvider>
   );
 }
 
-function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
+function MainAppContent({ theme, onThemeChange, language, onLanguageChange, currency, onCurrencyChange }: {
   theme: 'light' | 'dark';
   onThemeChange: (newTheme: 'light' | 'dark') => void;
   language: string;
   onLanguageChange: (newLang: string) => void;
+  currency: string;
+  onCurrencyChange: (newCurr: string) => void;
 }) {
+  const { currencySymbol } = useLanguage();
   const { t } = useLanguage();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -1001,7 +1019,7 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
                   
                   <div className="my-6">
                     <p className="text-4xl font-display font-black text-white">
-                      {(finances.filter(f => f.status === 'paid').length * 45).toFixed(0)} <span className="text-sm font-normal text-slate-400">TL</span>
+                      {(finances.filter(f => f.status === 'paid').length * 45).toFixed(0)} <span className="text-sm font-normal text-slate-400">{currencySymbol}</span>
                     </p>
                     <p className="text-[10px] text-emerald-400 font-bold mt-1 uppercase flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5" />
@@ -1018,7 +1036,7 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
                   <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                     <div className="bg-indigo-500 h-full rounded-full" style={{ width: "68%" }}></div>
                   </div>
-                  <p className="text-slate-500 text-[9px] text-center font-bold">{language === 'en' ? 'TARGET: 550 TL' : 'HEDEF: 550 TL'}</p>
+                  <p className="text-slate-500 text-[9px] text-center font-bold">{language === 'en' ? `TARGET: 550 ${currencySymbol}` : `HEDEF: 550 ${currencySymbol}`}</p>
                 </div>
               </div>
 
@@ -1385,6 +1403,8 @@ function MainAppContent({ theme, onThemeChange, language, onLanguageChange }: {
           onThemeChange={onThemeChange}
           currentLanguage={language}
           onLanguageChange={onLanguageChange}
+          currentCurrency={currency}
+          onCurrencyChange={onCurrencyChange}
         />
       )}
 

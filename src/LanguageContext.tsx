@@ -342,22 +342,50 @@ export const translations: Record<string, Record<string, string>> = {
 interface LanguageContextType {
   language: string;
   setLanguage: (lang: string) => void;
+  currency: string;
+  setCurrency: (curr: string) => void;
+  currencySymbol: string;
   t: (key: string) => string;
 }
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  TL: 'TL',
+  USD: '$',
+  EUR: '€',
+  PLN: 'zł',
+  GBP: '£'
+};
+
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export const LanguageProvider: React.FC<{ children: React.ReactNode; currentLang: string; onLangChange: (lang: string) => void }> = ({ 
+export const LanguageProvider: React.FC<{ 
+  children: React.ReactNode; 
+  currentLang: string; 
+  onLangChange: (lang: string) => void;
+  currentCurrency?: string;
+  onCurrencyChange?: (curr: string) => void;
+}> = ({ 
   children, 
   currentLang, 
-  onLangChange 
+  onLangChange,
+  currentCurrency = 'TL',
+  onCurrencyChange = () => {}
 }) => {
   const t = (key: string): string => {
     return translations[currentLang]?.[key] || translations['tr']?.[key] || key;
   };
 
+  const currencySymbol = CURRENCY_SYMBOLS[currentCurrency] || currentCurrency;
+
   return (
-    <LanguageContext.Provider value={{ language: currentLang, setLanguage: onLangChange, t }}>
+    <LanguageContext.Provider value={{ 
+      language: currentLang, 
+      setLanguage: onLangChange, 
+      currency: currentCurrency,
+      setCurrency: onCurrencyChange,
+      currencySymbol,
+      t 
+    }}>
       {children}
     </LanguageContext.Provider>
   );

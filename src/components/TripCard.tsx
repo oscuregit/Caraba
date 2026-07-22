@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trip, User } from '../types';
 import { sendJoinRequest, manageJoinRequest, completeTrip, updateTrip, cancelJoinRequest, deleteTrip } from '../services/db';
 import LocationShare from './LocationShare';
+import { useLanguage } from '../LanguageContext';
 import { 
   Car, 
   User as UserIcon, 
@@ -32,6 +33,7 @@ interface TripCardProps {
 }
 
 export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat }: TripCardProps) {
+  const { currencySymbol } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -139,7 +141,7 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
               )}
               {trip.vehicleInfo.fuelCostPerKm && (
                 <span className="text-[9px] text-emerald-700 font-semibold">
-                  ({trip.vehicleInfo.fuelCostPerKm} TL/km)
+                  ({trip.vehicleInfo.fuelCostPerKm} {currencySymbol}/km)
                 </span>
               )}
             </div>
@@ -164,9 +166,9 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
         {/* Price Tag & Join Button */}
         <div className="text-right space-y-1.5 shrink-0">
           <p className="text-xs font-black text-indigo-600">
-            {splitCostPerPerson.toFixed(2)} zł <span className="text-[9px] text-gray-400 font-medium">/ kişi</span>
+            {splitCostPerPerson.toFixed(2)} {currencySymbol} <span className="text-[9px] text-gray-400 font-medium">/ kişi</span>
           </p>
-          <span className="text-[8px] text-gray-400 block">Toplam: {trip.estimatedCost} zł</span>
+          <span className="text-[8px] text-gray-400 block">Toplam: {trip.estimatedCost} {currencySymbol}</span>
         </div>
 
         {/* Corner Dropdown Menu */}
@@ -520,7 +522,7 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
               </div>
               <div className="flex justify-between">
                 <span>Toplam Araç Masrafı</span>
-                <span className="text-gray-800">{trip.estimatedCost} zł</span>
+                <span className="text-gray-800">{trip.estimatedCost} {currencySymbol}</span>
               </div>
               <div className="flex justify-between">
                 <span>Kişi Sayısı (Taşıyıcı + Onaylı Yolcular)</span>
@@ -528,7 +530,7 @@ export default function TripCard({ trip, currentUser, allUsers, onEdit, onRepeat
               </div>
               <div className="border-t border-dashed border-gray-100 pt-1.5 flex justify-between font-black text-indigo-700">
                 <span>Kişi Başına Düşen Masraf</span>
-                <span>{trip.estimatedCost} / {totalPeople} = {splitCostPerPerson.toFixed(2)} zł</span>
+                <span>{trip.estimatedCost} / {totalPeople} = {splitCostPerPerson.toFixed(2)} {currencySymbol}</span>
               </div>
             </div>
           </div>

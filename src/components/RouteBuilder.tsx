@@ -97,7 +97,7 @@ const getLocalSuggestions = (queryStr: string) => {
   return results.slice(0, 5);
 };
 
-export default function RouteBuilder({ stops, onChange, onMetricsChange, currencySymbol = 'zł', fuelCostPerKm = 3.5 }: RouteBuilderProps) {
+export default function RouteBuilder({ stops, onChange, onMetricsChange, currencySymbol = 'TL', fuelCostPerKm = 3.5 }: RouteBuilderProps) {
   const [addressInput, setAddressInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isMapPopupOpen, setIsMapPopupOpen] = useState(false);

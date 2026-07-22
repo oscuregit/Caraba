@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trip, RouteStop, User, Vehicle } from '../types';
 import { createTrip, updateTrip, subscribeToVehicles } from '../services/db';
 import RouteBuilder from './RouteBuilder';
+import { useLanguage } from '../LanguageContext';
 import { X, Calendar, Clock, Car, Tag, Sparkles, AlertCircle, Copy, Gauge, Users, Check } from 'lucide-react';
 
 interface TripFormProps {
@@ -13,6 +14,7 @@ interface TripFormProps {
 }
 
 export default function TripForm({ currentUser, onClose, editingTrip, repeatingTrip, preselectedVehicleId }: TripFormProps) {
+  const { currencySymbol } = useLanguage();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
 
@@ -248,7 +250,7 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
               </div>
               {selectedVehicle && (
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                  {selectedVehicle.fuelCostPerKm} TL / km Yakıt Maliyeti
+                  {selectedVehicle.fuelCostPerKm} {currencySymbol} / km Yakıt Maliyeti
                 </span>
               )}
             </div>
@@ -263,7 +265,7 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
                   <option value="">Araç Seçilmedi (Standart Masraf)</option>
                   {vehicles.map(v => (
                     <option key={v.id} value={v.id}>
-                      🚗 {v.makeModel} ({v.plate}) - {v.fuelCostPerKm} TL/km
+                      🚗 {v.makeModel} ({v.plate}) - {v.fuelCostPerKm} {currencySymbol}/km
                     </option>
                   ))}
                 </select>
@@ -344,6 +346,7 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
               onChange={setStops}
               onMetricsChange={handleMetricsChange}
               fuelCostPerKm={fuelRate}
+              currencySymbol={currencySymbol}
             />
           </div>
 
@@ -362,7 +365,7 @@ export default function TripForm({ currentUser, onClose, editingTrip, repeatingT
                 <p className="text-[10px] text-emerald-600 font-bold uppercase">
                   {selectedVehicle ? 'Araç Yakıt Masrafı' : 'Tahmini Masraf'}
                 </p>
-                <p className="text-sm font-black text-emerald-700 mt-1">{estimatedCost} TL</p>
+                <p className="text-sm font-black text-emerald-700 mt-1">{estimatedCost} {currencySymbol}</p>
               </div>
             </div>
           )}

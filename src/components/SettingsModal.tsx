@@ -12,7 +12,8 @@ import {
   Save, 
   Check, 
   AlertTriangle,
-  Mail
+  Mail,
+  Coins
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -22,6 +23,8 @@ interface SettingsModalProps {
   onThemeChange: (theme: 'light' | 'dark') => void;
   currentLanguage: string;
   onLanguageChange: (lang: string) => void;
+  currentCurrency?: string;
+  onCurrencyChange?: (currency: string) => void;
 }
 
 export default function SettingsModal({
@@ -30,7 +33,9 @@ export default function SettingsModal({
   currentTheme,
   onThemeChange,
   currentLanguage,
-  onLanguageChange
+  onLanguageChange,
+  currentCurrency = 'TL',
+  onCurrencyChange = () => {}
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'app' | 'user'>('app');
   
@@ -210,6 +215,37 @@ export default function SettingsModal({
                   </select>
                   <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-slate-400">
                     <Globe className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Currency Selection */}
+              <div className="space-y-2">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-0.5">
+                  {currentLanguage === 'en' ? 'Currency Preference' : 'Para Birimi Seçeneği (Currency)'}
+                </label>
+                <div className="relative">
+                  <select
+                    value={currentCurrency}
+                    onChange={(e) => {
+                      onCurrencyChange(e.target.value);
+                      setUserSuccessMsg(currentLanguage === 'en' ? 'Currency preference updated.' : 'Para birimi tercihi güncellendi.');
+                    }}
+                    className={`w-full text-xs rounded-xl py-3 px-3.5 outline-none border transition-all appearance-none cursor-pointer font-medium ${
+                      currentTheme === 'dark' 
+                        ? 'bg-slate-950 border-slate-800 text-white focus:border-indigo-500' 
+                        : 'bg-white border-gray-200 text-gray-800 focus:border-indigo-500'
+                    }`}
+                    id="currency-select-dropdown"
+                  >
+                    <option value="TL">Türk Lirası (TL / ₺)</option>
+                    <option value="USD">Amerikan Doları (USD / $)</option>
+                    <option value="EUR">Euro (EUR / €)</option>
+                    <option value="PLN">Polonya Zlotysi (PLN / zł)</option>
+                    <option value="GBP">İngiliz Sterlini (GBP / £)</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Coins className="w-4 h-4" />
                   </div>
                 </div>
               </div>

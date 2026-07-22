@@ -41,7 +41,7 @@ const PRESET_COLORS = [
 const FUEL_TYPES = ['Benzin', 'Dizel', 'LPG', 'Elektrik', 'Hibrit'];
 
 export default function VehicleManager({ currentUser, vehicles, onStartTripWithVehicle }: VehicleManagerProps) {
-  const { t, language } = useLanguage();
+  const { t, language, currencySymbol } = useLanguage();
   
   const [showModal, setShowModal] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
@@ -227,7 +227,7 @@ export default function VehicleManager({ currentUser, vehicles, onStartTripWithV
               <p className="text-base font-black text-emerald-300">
                 {vehicles.length > 0 
                   ? (vehicles.reduce((acc, v) => acc + (v.fuelCostPerKm || 0), 0) / vehicles.length).toFixed(2) 
-                  : '0.00'} TL/km
+                  : '0.00'} {currencySymbol}/km
               </p>
             </div>
           </div>
@@ -331,7 +331,7 @@ export default function VehicleManager({ currentUser, vehicles, onStartTripWithV
                       <span>{language === 'en' ? 'Fuel Rate' : 'Km Ücreti'}</span>
                     </div>
                     <p className="text-sm font-black text-emerald-800 mt-0.5">
-                      {v.fuelCostPerKm.toFixed(2)} <span className="text-[10px] font-normal text-emerald-600">TL/km</span>
+                      {v.fuelCostPerKm.toFixed(2)} <span className="text-[10px] font-normal text-emerald-600">{currencySymbol}/km</span>
                     </p>
                   </div>
 
@@ -473,7 +473,7 @@ export default function VehicleManager({ currentUser, vehicles, onStartTripWithV
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                    {language === 'en' ? 'Fuel Rate (TL / km)' : 'Km Başı Yakıt (TL)'}
+                    {language === 'en' ? `Fuel Rate (${currencySymbol} / km)` : `Km Başı Yakıt (${currencySymbol})`}
                   </label>
                   <div className="relative">
                     <input
@@ -483,9 +483,9 @@ export default function VehicleManager({ currentUser, vehicles, onStartTripWithV
                       required
                       value={fuelCostPerKm}
                       onChange={(e) => setFuelCostPerKm(Number(e.target.value))}
-                      className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-3 pr-8 text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
+                      className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-3 pr-10 text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
                     />
-                    <span className="absolute right-2.5 top-2.5 text-[10px] font-bold text-slate-400">TL</span>
+                    <span className="absolute right-2.5 top-2.5 text-[10px] font-bold text-slate-400">{currencySymbol}</span>
                   </div>
                 </div>
 

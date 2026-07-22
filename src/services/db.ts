@@ -704,7 +704,7 @@ export async function completeTrip(tripId: string) {
             recipientId: passengerId,
             senderName: tripData.driverName,
             type: 'payment_received',
-            message: `"${tripData.title}" yolculuğu tamamlandı. ${tripData.driverName}'e ${splitCost} zł borcunuz bulunuyor.`,
+            message: `"${tripData.title}" yolculuğu tamamlandı. ${tripData.driverName}'e ${splitCost} tutarında borcunuz bulunuyor.`,
             createdAt: Date.now(),
             read: false
           });
@@ -787,7 +787,7 @@ export async function markAsPaid(transactionId: string) {
         recipientId: trans.receiverId,
         senderName: trans.payerName,
         type: 'payment_paid',
-        message: `${trans.payerName}, "${trans.tripTitle}" yolculuğu için olan ${trans.amount} zł borcunu "Ödendi" olarak işaretledi.`,
+        message: `${trans.payerName}, "${trans.tripTitle}" yolculuğu için olan ${trans.amount} tutarındaki borcunu "Ödendi" olarak işaretledi.`,
         createdAt: Date.now(),
         read: false
       });
